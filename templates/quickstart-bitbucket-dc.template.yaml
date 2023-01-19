@@ -73,6 +73,7 @@ Metadata:
         Parameters:
           - BambooIncluded
           - BambooVersion
+          - BambooLicenseKey
           - BambooDeploymentAutomationPlaybook
           - BitbucketContextPath
           - BitbucketProperties
@@ -221,6 +222,11 @@ Parameters:
   BitbucketLicenseKey:
     Default: ''
     Description: (Optional) Provide a license key for Bitbucket Data Center if you have one.
+    NoEcho: true
+    Type: String
+  BambooLicenseKey:
+    Default: ''
+    Description: (Optional) Provide a license key for Bamboo Data Center if you have one.
     NoEcho: true
     Type: String
   BitbucketAdminPassword:
@@ -679,6 +685,8 @@ Conditions:
     !Not [!Equals [!Ref BitbucketDatasetURL, '']]
   IsLicenseKeyProvided:
     !Not [!Equals [!Ref BitbucketLicenseKey, '']]
+  IsBambooLicenseKeyProvided:
+    !Not [!Equals [!Ref BambooLicenseKey, '']]
   IsBBAdminPasswordProvided:
     !Not [!Equals [!Ref BitbucketAdminPassword, '']]
   DBProvisionedIops:
@@ -1033,10 +1041,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 7e93447d44aa2ab3982b2b6895b456f9754f3c21"
+          Value: "COMMIT: 36ba93042f7169153887e51e0abf97de0750e452"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-19T00:54:18Z"
+          Value: "TIMESTAMP: 2023-01-19T05:50:52Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -2330,10 +2338,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 7e93447d44aa2ab3982b2b6895b456f9754f3c21"
+          Value: "COMMIT: 36ba93042f7169153887e51e0abf97de0750e452"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-19T00:54:18Z"
+          Value: "TIMESTAMP: 2023-01-19T05:50:52Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2353,7 +2361,19 @@ Resources:
                   - "ATL_APP_DATA_MOUNT_ENABLED=false"
                   - ""
                   - !Sub ["ATL_PRODUCT_VERSION=${BambooVersion}", BambooVersion: !Ref BambooVersion]
+                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_ADMIN_PASSWORD=${BBAdminPassword}", BBAdminPassword: !Ref BitbucketAdminPassword], !Ref "AWS::NoValue"]
+                  - !If  [IsBBAdminPasswordProvided, !Sub ["bamboo.admin.username=${ atl_admin_username }"
+                  - !If  [IsBBAdminFullNameProvided, !Sub ["bamboo.admin.fullname=${ atl_admin_fullname }"
+                  - !If  [IsBambooBAdminPasswordProvided, !Sub ["bamboo.admin.password=${ atl_admin_password }"
+                  - !If  [IsBambooAdminEmailProvided, !Sub ["bamboo.admin.email=${ atl_admin_email }"
+                  - !If  [IsBambooAgencySecurityTokenProvided, !Sub ["bamboo.agent.security.token=${ security_token }}"
+                  - !If  [IsBambooImportOptionProvided, !Sub ["atl_import_option=${ atl_import_option }"
+                  - !If  [IsBambooImportPathProvided, !Sub ["atl_import_path=${atl_import_path}"
+                  - !If  [IsBambooLicenseKeyProvided, !Sub ["ATL_LICENSEKEY='${BambooLicenseKey}'", LicenseKey: !Ref BitbucketLicenseKey], !Ref "AWS::NoValue"]
+                  - !Sub ["atl_broker_uri=${atlBrokerUri}", atlBrokerUri: "nio://0.0.0.0:54663"]
+                  - !Sub ["atl_broker_client_uri=${atlBrokerClientUri}", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName }]]
                   - !Sub ["ATL_BB_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName }]]]
+                  - "TomcatContextPath=/bamboo"
                   - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt LoadBalancer.DNSName]]
                   - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
