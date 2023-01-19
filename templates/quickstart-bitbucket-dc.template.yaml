@@ -35,6 +35,7 @@ Metadata:
       - Label:
           default: Database
         Parameters:
+          - DBSubnetImportSuffix
           - DBEngine
           - DBEngineVersion
           - DBInstanceClass
@@ -42,8 +43,12 @@ Metadata:
           - DBMasterUserPassword
           - DBMultiAZ
           - DBPassword
+          - BambooDBPassword
           - DBStorage
+          - DBStorageEncrypted
           - DBStorageType
+          - DBPreferredMaintenanceWindow
+          - DBPreferredBackupWindow
       - Label:
           default: Bastion host utilization
         Parameters:
@@ -59,12 +64,17 @@ Metadata:
           default: Networking
         Parameters:
           - CidrBlock
+          - CidrSshEnabled
           - InternetFacingLoadBalancer
           - CustomDnsName
           - SSLCertificateARN
       - Label:
           default: Advanced (Optional)
         Parameters:
+          - BambooIncluded
+          - BambooVersion
+          - BambooDeploymentAutomationPlaybook
+          - BitbucketContextPath
           - BitbucketProperties
           - JvmHeapOverride
           - JvmSupportOpts
@@ -122,6 +132,8 @@ Metadata:
         default: Enable RDS Multi-AZ deployment
       DBPassword:
         default: Bitbucket database password *
+      BambooDBPassword:
+        default: Bamboo database password *
       DBStorage:
         default: Database storage
       DBStorageType:
@@ -182,6 +194,14 @@ Metadata:
         default: Quick Start S3 Key Prefix
 
 Parameters:
+  BambooIncluded:
+    Default: 'false'
+    Description: "Setup Bamboo on same Load balancer on /bamboo context path"
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: Must be 'true' or 'false'.
+    Type: String
   BitbucketProperties:
     Default: ''
     Description: A space-separated list of bitbucket properties in the form 'key1=value1 key2=value2 ...' Find documentation at https://confluence.atlassian.com/x/m5ZKLg.
@@ -191,6 +211,12 @@ Parameters:
     AllowedPattern: '([^1234]\.\d+\.\d+(-?.*))'
     ConstraintDescription: 'Must be a valid Bitbucket version number. For example: 5.0.0 or higher'
     Description: 'Version of Bitbucket to install. Please use version 5.0.0 or higher. Find valid versions at http://go.atlassian.com/bbs-releases.'
+    Type: String
+  BambooVersion:
+    Default: "9.1.0"
+    AllowedPattern: '([^1234]\.\d+\.\d+(-?.*))'
+    ConstraintDescription: 'Must be a valid Bamboo version number. For example: 8.0.0 or higher'
+    Description: 'Version of Bamboo to install. Please use version 8.0.0 or higher. Find valid versions at https://www.atlassian.com/software/bamboo/download.'
     Type: String
   BitbucketLicenseKey:
     Default: ''
@@ -208,6 +234,10 @@ Parameters:
     Default: ''
     Description: (Optional) Provide the HTTP/HTTPS URL for the dataset to restore. Refer https://confluence.atlassian.com/bitbucketserver/importing-957497836.html.
     Type: String
+  BitbucketContextPath:
+    Default: ''
+    Description: (Optional) If you place "server.context-path=/bitbucket" in the bitbucket custom properties, to ensure health check passes put in /bitbucket in this setting
+    Type: String
   CidrBlock:
     AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
@@ -216,8 +246,9 @@ Parameters:
     MaxLength: 18
     Type: String
   ClusterNodeInstanceType:
-    Default: c5.xlarge
+    Default: t3a.medium
     AllowedValues:
+      - t3a.medium
       - c4.large
       - c4.xlarge
       - c4.2xlarge
@@ -341,6 +372,10 @@ Parameters:
     Default: "aws_bitbucket_dc_node.yml"
     Type: String
     Description: The Ansible playbook to invoke to initialize the application node on first start.
+  BambooDeploymentAutomationPlaybook:
+    Default: "aws_bamboo_dc_node.yml"
+    Type: String
+    Description: The Ansible playbook to invoke to initialize the application node on first start.
   DeploymentAutomationCustomParams:
     Default: ""
     Type: String
@@ -355,6 +390,10 @@ Parameters:
     Description: "Enables CloudWatch metrics with or without log gathering. If cost is an issue, you can disable this altogether."
     AllowedValues: ["Off", "Metrics Only", "Metrics and Logs"]
     ConstraintDescription: "Must be 'Off', 'Metrics Only', or 'Metrics and Logs'"
+  DBSubnetImportSuffix:
+    Default: 'PriNets'
+    Type: String
+    Description: "Allows alternative subnets to be used for database. Default: PriNets i.e. ExportPrefix = 'ATL-' value set to 'DatNets' will import : ATL-DatNets"
   DBEngine:
     Default: 'PostgreSQL'
     Description: 'Database Engine to use. PostgreSQL or Amazon Aurora PostgreSQL.'
@@ -372,8 +411,9 @@ Parameters:
     Description: "The database engine version to use; we'll install a suitable minor version for your chosen engine. Make sure that the Bitbucket version you're installing supports the database engine selected."
     Type: String
   DBInstanceClass:
-    Default: db.m4.large
+    Default: db.t3.medium
     AllowedValues:
+      - db.t3.medium
       - db.m4.large
       - db.m4.xlarge
       - db.m4.2xlarge
@@ -435,6 +475,13 @@ Parameters:
     MaxLength: 128
     NoEcho: true
     Type: String
+  BambooDBPassword:
+    AllowedPattern: '(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
+    ConstraintDescription: 'Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ @ + % &'
+    Description: "Database password used by Bamboo. Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ @ + % &"
+    MaxLength: 128
+    NoEcho: true
+    Type: String
   DBMaster:
     Default: ''
     ConstraintDescription: Must be a valid RDS ARN.
@@ -459,6 +506,21 @@ Parameters:
     ConstraintDescription: Must be 'General Purpose (SSD)' or 'Provisioned IOPS'.
     Description: Database storage type.
     Type: String
+  DBPreferredMaintenanceWindow:
+    Default: "wed:19:00-wed:19:45"
+    Description: The weekly time range during which system maintenance can occur, in UTC.
+    Type: String
+  DBPreferredBackupWindow:
+    Default: "16:00-16:30"
+    Description: The weekly time range during which system backup's can occur, in UTC.
+    Type: String
+  DBStorageEncrypted:
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Set for encrypted disk
+    Type: String
   ElasticSearchPassword:
     Description: "Password for the elasticsearch master user, the username will be 'bitbucket'. If no password is specified, Bitbucket will authenticate with the elasticsearch cluster using IAM request signing (not recommended)."
     Type: String
@@ -466,8 +528,10 @@ Parameters:
   ElasticsearchInstanceType:
     Description: EC2 instance type for the Amazon Elasticsearch service to run on.
     Type: String
-    Default: m4.xlarge.elasticsearch
+    Default: t3.small.elasticsearch
     AllowedValues:
+      - t3.small.elasticsearch
+      - t3.medium.elasticsearch
       - m4.large.elasticsearch
       - m4.xlarge.elasticsearch
       - m4.2xlarge.elasticsearch
@@ -478,7 +542,7 @@ Parameters:
       - r4.8xlarge.elasticsearch
       - i2.xlarge.elasticsearch
       - i2.2xlarge.elasticsearch
-    ConstraintDescription: Must be an Elasticsearch instance type in the M4, R4 or I2 family
+    ConstraintDescription: Must be an Elasticsearch instance type in the T2, M4, R4 or I2 family
   ElasticsearchNodeVolumeSize:
     Description: The EBS volume size (in GB) of each Elasticsearch node.
     Type: Number
@@ -496,8 +560,9 @@ Parameters:
       Each Atlassian Standard Infrastructure (ASI) uses a unique identifier. If you have multiple ASIs within the same AWS region, use this field to specify where to deploy Bitbucket.
     Type: String
   FileServerInstanceType:
-    Default: m4.xlarge
+    Default: t3a.medium
     AllowedValues:
+      - t3a.medium
       - c4.xlarge
       - c4.2xlarge
       - c4.4xlarge
@@ -537,7 +602,7 @@ Parameters:
     Description: EBS snapshot ID of an existing backup to restore as the home directory volume. Must be used in conjunction with DBSnapshotId. Leave blank for a new instance.
     Type: String
   HomeVolumeType:
-    Default: Provisioned IOPS
+    Default: General Purpose (SSD)
     Description: Bitbucket home storage type.
     AllowedValues: [General Purpose (SSD), Provisioned IOPS]
     ConstraintDescription: Must be 'General Purpose (SSD)' or 'Provisioned IOPS'.
@@ -562,6 +627,13 @@ Parameters:
       - "true"
       - "false"
     Description: Whether to grant access to BitBucket EC2 instances through the ASI's Bastion host (if it exists). If 'true', remember to provide an EC2 Key Pair. If your ASI does not have a Bastion host, set this to 'false'.
+    Type: String
+  CidrSshEnabled:
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether to open ssh port to cidr range
     Type: String
   KeyPairName:
     ConstraintDescription: Must be the name of an existing EC2 Key Pair. Note the supplied value must not include the file extension.
@@ -599,6 +671,10 @@ Parameters:
     Type: String
 
 Conditions:
+  IsBambooIncluded:
+    !Not [!Equals [!Ref BambooIncluded, '']]
+  BitbucketContextPathProvided:
+    !Not [!Equals [!Ref BitbucketContextPath, '']]
   IsURLProvided:
     !Not [!Equals [!Ref BitbucketDatasetURL, '']]
   IsLicenseKeyProvided:
@@ -653,6 +729,8 @@ Conditions:
   UseBastionHost: !And
     - !Equals [!Ref BastionHostRequired, true]
     - !Condition KeyProvided
+  AllowSshCidrBlock:
+    !Equals [!Ref CidrSshEnabled, true]
 
 Mappings:
   AWSRegionArch2AMI:
@@ -920,6 +998,11 @@ Resources:
       Roles: [!Ref BitbucketClusterNodeRole]
   ClusterNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - LoadBalancer
+      - TargetGroupBitbucket80
+      - TargetGroupBitbucket443
+      - TargetGroupBitbucket7999
     CreationPolicy:
       ResourceSignal:
         Count: !Ref ClusterNodeMin
@@ -929,7 +1012,12 @@ Resources:
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
-      LoadBalancerNames: [!Ref LoadBalancer]
+      LoadBalancerNames:
+       - !Ref LoadBalancer
+      TargetGroupARNs:
+       - !Ref TargetGroupBitbucket80
+       - !Ref TargetGroupBitbucket443
+       - !Ref TargetGroupBitbucket7999
       VPCZoneIdentifier:
         - !Select
           - 0
@@ -945,10 +1033,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 1ab73837b650a79665ca974ceb37e4088eee21b2"
+          Value: "COMMIT: 7e93447d44aa2ab3982b2b6895b456f9754f3c21"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2021-11-25T07:12:04Z"
+          Value: "TIMESTAMP: 2023-01-19T00:54:18Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1493,8 +1581,12 @@ Resources:
               command: /opt/atlassian/bin/clone_deployment_repo
               ignoreErrors: true
             080_run_atl_init_node:
-              command:
+              command: !Sub |
                 cd /opt/atlassian/dc-deployments-automation/ && ./bin/install-ansible && ./bin/ansible-with-atl-env inv/aws_node_local aws_bitbucket_nfs_node.yml /var/log/ansible-bootstrap.log
+              ignoreErrors: true
+            0802_run_atl_init_node2: #bamboo
+              command:
+                !Sub [ "${commandToRun}", commandToRun: !If [ IsBambooIncluded, "cd /opt/atlassian/dc-deployments-automation/ && ./bin/ansible-with-atl-env inv/aws_node_local aws_bamboo_nfs_node.yml /var/log/ansible-bootstrap.log", "echo 'not required'"]]
               ignoreErrors: true
 
     Properties:
@@ -1601,6 +1693,7 @@ Resources:
     Condition: DBEnginePostgres
     Properties:
       AllocatedStorage: !Ref DBStorage
+#      StorageEncrypted: !Ref DBStorageEncrypted #FIXME
       DBInstanceClass: !Ref DBInstanceClass
       DBInstanceIdentifier: !GetAtt DbInstanceName.DBInstanceName
       DBName: !If [RestoreRDSOrStandby, !Ref "AWS::NoValue", bitbucket]
@@ -1618,6 +1711,12 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName} Bitbucket PostgreSQL Database"
       VPCSecurityGroups: [!Ref SecurityGroup]
+      PreferredMaintenanceWindow: !Ref DBPreferredMaintenanceWindow
+      PreferredBackupWindow: !Ref DBPreferredBackupWindow
+      AutoMinorVersionUpgrade: true
+      AllowMajorVersionUpgrade: true
+      BackupRetentionPeriod: "30"
+      CopyTagsToSnapshot: true
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Condition: DBEnginePostgres
@@ -1625,7 +1724,7 @@ Resources:
       DBSubnetGroupDescription: DBSubnetGroup
       SubnetIds: !Split
         - ","
-        - Fn::ImportValue: !Sub "${ExportPrefix}PriNets"
+        - Fn::ImportValue: !Sub "${ExportPrefix}${DBSubnetImportSuffix}"
   DBCluster:
     Type: AWS::CloudFormation::Stack
     Condition: DBEngineAurora
@@ -1683,7 +1782,7 @@ Resources:
       HealthCheck:
         HealthyThreshold: '2'
         Interval: '60'
-        Target: HTTP:7990/status
+        Target: !Sub "HTTP:7990${BitbucketContextPath}/status"
         Timeout: '29'
         UnhealthyThreshold: '2'
       Scheme: !If [UsePublicIp, 'internet-facing', 'internal']
@@ -1696,15 +1795,370 @@ Resources:
           Value: !Sub "${AWS::StackName} LoadBalancer"
         - Key: Cluster
           Value: !Ref AWS::StackName
+  ## new elb2
+  NetworkLoadBalancerELB2: #To allow TCP 7999 and http/https routing
+    DependsOn:
+      - SecurityGroup
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      #      Name: "${AWS::StackName}-LoadBalancerELB2" 32char only
+      IpAddressType: ipv4
+      Scheme: !If [ UsePublicIp, 'internet-facing', 'internal' ]
+      Subnets: !Split
+        - ","
+        - Fn::ImportValue: !Sub "${ExportPrefix}PubNets"
+      Type: "network"
+      LoadBalancerAttributes:
+        - Key: "deletion_protection.enabled" #Deletion protection: Disabled
+          Value: false #true
+        #        - Key: "access_logs.s3.enabled" #Access logs Disabled
+        #          Value: false #true
+        #        - Key: "access_logs.s3.bucket"
+        #          Value: !Ref S3LogsBucket
+        #        - Key: "access_logs.s3.prefix"
+        #          Value: "elb-logs"
+        - Key: "load_balancing.cross_zone.enabled"
+          Value: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Network LoadBalancer"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+  LoadBalancerELB2:
+    DependsOn:
+      - SecurityGroup
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+#      Name: "${AWS::StackName}-LoadBalancerELB2" 32char only
+      IpAddressType: ipv4
+      Scheme: !If [ UsePublicIp, 'internet-facing', 'internal' ]
+      SecurityGroups: [ !Ref SecurityGroup ]
+      Subnets: !Split
+        - ","
+        - Fn::ImportValue: !Sub "${ExportPrefix}PubNets"
+      Type: "application"
+      LoadBalancerAttributes:
+        - Key: "deletion_protection.enabled" #Deletion protection: Disabled
+          Value: false #true
+        #        - Key: "access_logs.s3.enabled" #Access logs Disabled
+        #          Value: false #true
+        #        - Key: "access_logs.s3.bucket"
+        #          Value: !Ref S3LogsBucket
+        #        - Key: "access_logs.s3.prefix"
+        #          Value: "alb-logs"
+        - Key: "idle_timeout.timeout_seconds" #Idle timeout:  60 seconds
+          Value: 3600
+        - Key: "load_balancing.cross_zone.enabled"
+          Value: true
+        - Key: "routing.http.desync_mitigation_mode" #Desync mitigation mode:  Defensive
+          Value: defensive
+        - Key: "routing.http.preserve_host_header.enabled" #Preserve host header:  Disabled
+          Value: false
+        - Key: "routing.http2.enabled" #HTTP/2  Enabled
+          Value: true
+        - Key: "routing.http.drop_invalid_header_fields.enabled" #Drop invalid header fields:  Disabled
+          Value: false
+        - Key: "waf.fail_open.enabled" #WAF fail open: Disabled
+          Value: false
+        - Key: "routing.http.x_amzn_tls_version_and_cipher_suite.enabled" #TLS version and cipher headers:  Disabled
+          Value: false
+        - Key: "routing.http.xff_header_processing.mode" #X-Forward-For header:  Append
+          Value: append
+        - Key: "routing.http.xff_client_port.enabled" #Client port preservation:  Disabled
+          Value: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} LoadBalancer"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+  TargetGroupBitbucket80:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+#      Name: "${AWS::StackName}-TargetGroupBitbucket80" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: instance
+      Port: !If [ DoSSL, '7991', '7990' ]
+      Protocol: HTTP
+      HealthCheckEnabled: true
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 7990
+      HealthCheckPath: !Sub "${BitbucketContextPath}/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: app_cookie
+        - Key: stickiness.app_cookie.cookie_name
+          Value: BITBUCKETSESSIONID
+        - Key: deregistration_delay.timeout_seconds
+          Value: '300'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group Bitbucket Port 80"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+  Listener80:
+    DependsOn:
+      - TargetGroupBitbucket80
+      - LoadBalancerELB2
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancerELB2
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBitbucket80
+            TargetGroupStickinessConfig:
+              Enabled: true
+              DurationSeconds: 500 #1-604800 seconds (7 days).
+
+  TargetGroupBitbucket443:
+    Condition: DoSSL
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+#      Name: "${AWS::StackName}-TargetGroupBitbucket443" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: instance
+      Port: 7990
+      Protocol: HTTP
+      HealthCheckEnabled: true
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 7990
+      HealthCheckPath: !Sub "${BitbucketContextPath}/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: app_cookie
+        - Key: stickiness.app_cookie.cookie_name
+          Value: BITBUCKETSESSIONID
+        - Key: deregistration_delay.timeout_seconds
+          Value: '300'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group Bitbucket Port 433"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+  Listener443:
+    Condition: DoSSL
+    DependsOn:
+      - TargetGroupBitbucket443
+      - LoadBalancerELB2
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancerELB2
+      Port: 443
+      Protocol: "HTTPS"
+      Certificates:
+        - CertificateArn: !Ref SSLCertificateARN
+      SslPolicy: "ELBSecurityPolicy-TLS-1-2-Ext-2018-06"
+      DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBitbucket443
+            TargetGroupStickinessConfig:
+              Enabled: true
+              DurationSeconds: 500 #1-604800 seconds (7 days).
+
+  listener443RootRedirectRule1:
+    Condition: BitbucketContextPathProvided
+    DependsOn:
+     - Listener443
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: redirect
+          RedirectConfig:
+            Host: "#{host}"
+            Path: !Sub "/${BitbucketContextPath}"
+            Port: "#{port}"
+            Protocol: "#{protocol}"
+            Query: ""
+            StatusCode: "HTTP_301"
+      Conditions:
+        - Field: "path-pattern"
+          PathPatternConfig:
+            Values:
+              - "/"
+      ListenerArn: !Ref Listener443
+      Priority: 1
+
+  listener80RootRedirectRule1:
+    Condition: BitbucketContextPathProvided
+    DependsOn: Listener80
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: redirect
+          RedirectConfig:
+            Host: "#{host}"
+            Path: !Sub "/${BitbucketContextPath}"
+            Port: "#{port}"
+            Protocol: "#{protocol}"
+            Query: ""
+            StatusCode: "HTTP_301"
+      Conditions:
+        - Field: "path-pattern"
+          PathPatternConfig:
+            Values:
+              - "/"
+      ListenerArn: !Ref Listener80
+      Priority: 1
+
+  TargetGroupBitbucket7999:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+#      Name: "${AWS::StackName}-TargetGroupBitbucket7999" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: instance
+      Port: 7999
+      Protocol: TCP
+      HealthCheckEnabled: true
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 7990
+      HealthCheckPath: !Sub "${BitbucketContextPath}/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group Bitbucket Port 7999"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+
+  TargetGroupBitbucketHttpALB:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      #      Name: "${AWS::StackName}-TargetGroupBitbucket7999" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: alb
+      Targets:
+        - Id: !Ref LoadBalancerELB2
+      Protocol: TCP
+      Port: 80
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 80
+      HealthCheckPath: !Sub "${BitbucketContextPath}/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group LoadBalancer ALB"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+  TargetGroupBitbucketHttpsALB:
+    Condition: DoSSL
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      #      Name: "${AWS::StackName}-TargetGroupBitbucket7999" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: alb
+      Targets:
+        - Id: !Ref LoadBalancerELB2
+      Protocol: TCP
+      Port: 443
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 443
+      HealthCheckPath: !Sub "${BitbucketContextPath}/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group LoadBalancer ALB"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+  NLBListener7999:
+    DependsOn:
+      - TargetGroupBitbucket7999
+      - NetworkLoadBalancerELB2
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NetworkLoadBalancerELB2
+      Port: 7999
+      Protocol: "TCP"
+      DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBitbucket7999
+
+  NLBListener80:
+    DependsOn:
+      - TargetGroupBitbucketHttpALB
+      - NetworkLoadBalancerELB2
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NetworkLoadBalancerELB2
+      Port: 80
+      Protocol: "TCP"
+      DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBitbucketHttpALB
+
+  NLBListener443:
+    Condition: DoSSL
+    DependsOn:
+      - TargetGroupBitbucketHttpsALB
+      - NetworkLoadBalancerELB2
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NetworkLoadBalancerELB2
+      Port: 443
+      Protocol: "TCP"
+      DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBitbucketHttpsALB
+
+  ##end new elb2
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group allowing SSH and HTTP/HTTPS access
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref CidrBlock
+        - !If
+          - AllowSshCidrBlock
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp: !Ref CidrBlock
+          - Ref: AWS::NoValue
+
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -1716,6 +2170,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 7999
           ToPort: 7999
+          CidrIp: !Ref CidrBlock
+        - IpProtocol: tcp
+          FromPort: 54663
+          ToPort: 54663
           CidrIp: !Ref CidrBlock
         - !If
           - UseBastionHost
@@ -1795,6 +2253,410 @@ Resources:
         ProductFamilyName: "bitbucket"
         AsgToMonitor: !Ref ClusterNodeGroup
 
+# Optional: Bamboo ASG under same loadbalancer and db
+#Optional when BambooIncluded is true
+  BambooClusterNodeRole:
+    Condition: IsBambooIncluded
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy"
+      Path: /
+      Policies:
+        - PolicyName: BambooClusterNodePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 'autoscaling:DescribeTags'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeTags'
+                Effect: Allow
+                Resource: ['*']
+              - Action:
+                  - 'autoscaling:CreateOrUpdateTags'
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:autoscaling:*:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/*"
+  BambooClusterNodeInstanceProfile:
+    Condition: IsBambooIncluded
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref BambooClusterNodeRole]
+  BambooClusterNodeGroup:
+    Condition: IsBambooIncluded
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - LoadBalancer
+      - TargetGroupBamboo80
+      - TargetGroupBamboo443
+      - TargetGroupBamboo54663
+    CreationPolicy:
+      ResourceSignal:
+        Count: !Ref ClusterNodeMin
+        Timeout: PT15M
+    Properties:
+      DesiredCapacity: !If [StandbyMode, '0', !Ref ClusterNodeMin]
+      LaunchConfigurationName: !Ref BambooClusterNodeLaunchConfig
+      MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
+      MaxSize: !Ref ClusterNodeMax
+      LoadBalancerNames:
+        - !Ref LoadBalancer
+      TargetGroupARNs:
+        - !Ref TargetGroupBamboo80
+        - !Ref TargetGroupBamboo443
+        - !Ref TargetGroupBamboo54663
+      VPCZoneIdentifier:
+        - !Select
+          - 0
+          - !Split
+            - ','
+            - Fn::ImportValue: !Sub '${ExportPrefix}PriNets'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Bamboo Node"
+          PropagateAtLaunch: true
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+          PropagateAtLaunch: true
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 7e93447d44aa2ab3982b2b6895b456f9754f3c21"
+          PropagateAtLaunch: true
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2023-01-19T00:54:18Z"
+          PropagateAtLaunch: true
+  BambooClusterNodeLaunchConfig:
+    Condition: IsBambooIncluded
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+      - AnsibleRepoPinSHA
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/atl:
+              content:
+                !Join
+                - "\n"
+                -
+                  - "ATL_PRODUCT=bamboo"
+                  - "ATL_APP_DATA_MOUNT_ENABLED=false"
+                  - ""
+                  - !Sub ["ATL_PRODUCT_VERSION=${BambooVersion}", BambooVersion: !Ref BambooVersion]
+                  - !Sub ["ATL_BB_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName }]]]
+                  - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt LoadBalancer.DNSName]]
+                  - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
+                  - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
+                  - !Sub ["ATL_DEPLOYMENT_REPOSITORY_BRANCH=${DeployRepositoryBranch}", DeployRepositoryBranch: !Ref "DeploymentAutomationBranch"]
+                  - !Sub ["ATL_DEPLOYMENT_REPOSITORY_PLAYBOOK=${DeployRepositoryPlaybook}", DeployRepositoryPlaybook: !Ref "DeploymentAutomationPlaybook"]
+                  - !Sub ["ATL_DEPLOYMENT_REPOSITORY_KEYNAME=${DeployRepositoryKeyName}", DeployRepositoryKeyName: !Ref "DeploymentAutomationKeyName"]
+                  - !Sub ["ATL_DEPLOYMENT_REPOSITORY_CUSTOM_PARAMS='${DeployRepositoryCustomParams}'", DeployRepositoryCustomParams: !Ref "DeploymentAutomationCustomParams"]
+                  - ""
+                  - !Sub ["ATL_JVM_HEAP=${JvmHeapOverride}", JvmHeapOverride: !Ref "JvmHeapOverride"]
+                  - !Sub ["ATL_JVM_OPTS='${JvmSupportOpts}'", JvmSupportOpts: !Ref "JvmSupportOpts"]
+                  - ""
+                  - !Sub ["ATL_AWS_REGION=${Region}", Region: !Ref "AWS::Region"]
+                  - !Sub ["ATL_AWS_STACK_NAME=${StackName}", StackName: !Ref "AWS::StackName"]
+                  - !Sub ["ATL_AWS_IAM_ROLE=${Role}", Role: !Ref BambooClusterNodeRole]
+                  - !Sub ["ATL_AWS_IAM_ROLE_ARN=${Role}", Role: !GetAtt BitbucketFileServerRole.Arn]
+                  - ""
+                  - "ATL_JDBC_DB_NAME=bamboo"
+                  - "ATL_JDBC_DRIVER=org.postgresql.Driver"
+                  - "ATL_JDBC_USER=atlbamboo"
+                  - !Sub ["ATL_JDBC_PASSWORD='${BambooDBPassword}'", BambooDBPassword: !Ref BambooDBPassword]
+                  - !Sub ["ATL_DB_ROOT_PASSWORD='${DBMasterUserPassword}'", DBMasterUserPassword: !Ref DBMasterUserPassword]
+                  - !Sub ["ATL_DB_ENGINE=${DBEngine}", DBEngine: !If [DBEngineAurora, aurora_postgres, !If [DBEnginePostgres, rds_postgres, '']]]
+                  - !Sub ["ATL_DB_HOST=${DBEndpointAddress}", DBEndpointAddress: !If [DBEngineAurora, !GetAtt DBCluster.Outputs.RDSEndPointAddress, !GetAtt DB.Endpoint.Address]]
+                  - !Sub ["ATL_DB_PORT=${DBEndpointPort}", DBEndpointPort: !If [DBEngineAurora, !GetAtt DBCluster.Outputs.RDSEndPointPort, !GetAtt DB.Endpoint.Port]]
+                  - !Sub ["ATL_JDBC_URL=jdbc:postgresql://${DBEndpointAddress}:${DBEndpointPort}/bamboo", { DBEndpointAddress: !If [DBEngineAurora, !GetAtt DBCluster.Outputs.RDSEndPointAddress, !GetAtt DB.Endpoint.Address], DBEndpointPort: !If [DBEngineAurora, !GetAtt DBCluster.Outputs.RDSEndPointPort, !GetAtt DB.Endpoint.Port]}]
+                  - ""
+                  - !Sub ["ATL_RDS_INSTANCE_ID=${DB}", DB: !If [ DBEngineAurora, !Ref "DBCluster", !Ref "DB"]]
+                  - !Sub ["ATL_RDS_INSTANCE_CLASS=${DBInstanceClass}", DBInstanceClass: !Ref "DBInstanceClass"]
+                  - !Sub ["ATL_RDS_MULTI_AZ=${DBMultiAZ}", DBMultiAZ: !Ref "DBMultiAZ"]
+                  - !Sub ["ATL_RDS_SUBNET_GROUP_NAME=${DBSubnetGroup}", DBSubnetGroup: !If [ DBEnginePostgres, !Ref "DBSubnetGroup", '']]
+                  - !Sub ["ATL_RDS_SECURITY_GROUP=${SecurityGroup}", SecurityGroup: !Ref "SecurityGroup"]
+                  - ""
+                  - !Sub ["ATL_NFS_DISK_VOLUME_TYPE=${VolType}", VolType: !If [IsHomeProvisionedIops, "io1", "gp2"]]
+                  - !Sub ["ATL_NFS_DISK_VOLUME_IOPS=${VolIOPs}", VolIOPs: !If [IsHomeProvisionedIops, !Ref "HomeIops", ""]]
+                  - ""
+                  - !If [DoSSL, "ATL_SSL_PROXY=true", !Ref "AWS::NoValue"]
+
+                  - !Sub ["ATL_AWS_ENABLE_CLOUDWATCH=${EnableCW}", EnableCW: !If [EnableCloudWatch, true, false]]
+                  - !Sub ["ATL_AWS_ENABLE_CLOUDWATCH_LOGS=${EnableCWLogs}", EnableCWLogs: !If [EnableCloudWatchLogs, true, false]]
+
+            /opt/atlassian/bin/clone_deployment_repo:
+              content: !Sub |
+                #!/bin/bash
+                key_location=/root/.ssh/deployment_repo_key
+                key_name="${DeploymentAutomationKeyName}"
+                ssm_pin=/${AWS::StackName}/pinned-ansible-sha
+
+                yum install -y git awscli jq
+
+                if [[ ! -z "$key_name" ]]; then
+                    # Ensure awscli is up to date
+                    key_val=$(aws --region=${AWS::Region} ssm get-parameters --names "$key_name" --with-decryption | jq --raw-output '.Parameters[0].Value')
+                    echo -e "$key_val" > $key_location
+                    chmod 600 $key_location
+                    export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -i $key_location"
+                else
+                    export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+                fi
+
+                ### Ansible repo pinning ###
+                pinned_commit_id=$(aws --region=${AWS::Region} ssm get-parameters --names "$ssm_pin" | jq --raw-output '.Parameters[0].Value')
+
+                git clone "${DeploymentAutomationRepository}" -b "${DeploymentAutomationBranch}" /opt/atlassian/dc-deployments-automation/
+                cd /opt/atlassian/dc-deployments-automation/
+
+                if [[ "$pinned_commit_id" == "latest" || -z "$pinned_commit_id" ]]; then
+                  head_id=$(git rev-parse HEAD)
+                  echo "SSM param [$ssm_pin] has been set to 'latest' - Using the HEAD SHA [$head_id] to build cluster [${AWS::StackName}]"
+                  echo "Updating SSM param [$ssm_pin] with current HEAD SHA: [$head_id]"
+                  aws --region=${AWS::Region} ssm put-parameter --name "$ssm_pin" --value "$head_id" --overwrite --type String
+                else
+                  echo "Ansible repo has been pinned, checking out commit: [$pinned_commit_id]"
+                  git checkout -b "pinned-ansible-sha-$pinned_commit_id" "$pinned_commit_id"
+                fi
+              mode: "000750"
+              owner: root
+              group: root
+
+          commands:
+            070_create_atl_dir:
+              test: "test ! -d /opt/atlassian/"
+              command: mkdir -p /opt/atlassian
+              ignoreErrors: false
+            071_install_packages:
+              command: yum install -y git python-virtualenv
+              ignoreErrors: true
+            072_clone_atl_scripts:
+              test: "test ! -d /opt/atlassian/dc-deployments-automation/"
+              command: /opt/atlassian/bin/clone_deployment_repo
+              ignoreErrors: true
+            080_run_atl_init_node:
+              command: !Sub |
+                cd /opt/atlassian/dc-deployments-automation/ && ./bin/install-ansible && ./bin/ansible-with-atl-env inv/aws_node_local ${BambooDeploymentAutomationPlaybook} /var/log/ansible-bootstrap.log
+              ignoreErrors: true
+
+    Properties:
+      AssociatePublicIpAddress: false
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref ClusterNodeVolumeSize
+      KeyName: !If
+        - KeyProvided
+        - !Ref KeyPairName
+        - Ref: AWS::NoValue
+      IamInstanceProfile: !Ref BambooClusterNodeInstanceProfile
+      ImageId:
+        !FindInMap
+        - AWSRegionArch2AMI
+        - !Ref "AWS::Region"
+        - HVM64
+      InstanceType: !Ref ClusterNodeInstanceType
+      SecurityGroups: [!Ref SecurityGroup]
+      UserData:
+        Fn::Base64:
+          !Join
+          - ""
+          -
+            - "#!/bin/bash -xe\n"
+            - "yum update -y aws-cfn-bootstrap amazon-ssm-agent\n"
+            - !Sub "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName}"
+            - !Sub " --resource BambooClusterNodeLaunchConfig --region ${AWS::Region}\n"
+            - !Sub "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName}"
+            - !Sub " --resource BambooClusterNodeGroup --region ${AWS::Region}\n"
+  BambooClusterNodeScaleUpPolicy:
+    Condition: IsBambooIncluded
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref BambooClusterNodeGroup
+      Cooldown: '600'
+      ScalingAdjustment: 1
+  BambooClusterNodeScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref BambooClusterNodeGroup
+      Cooldown: '600'
+      ScalingAdjustment: -1
+  BambooCPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale up if CPU > 60% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 60
+      AlarmActions: [!Ref BambooClusterNodeScaleUpPolicy]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref BambooClusterNodeGroup
+      ComparisonOperator: GreaterThanThreshold
+  BambooCPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale down if CPU < 40% for 30 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 30
+      Threshold: 40
+      AlarmActions: [!Ref BambooClusterNodeScaleDownPolicy]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref BambooClusterNodeGroup
+      ComparisonOperator: LessThanThreshold
+
+
+  TargetGroupBamboo54663:
+    Condition: IsBambooIncluded
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      #      Name: "${AWS::StackName}-TargetGroup" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: instance
+      Port: 54663
+      Protocol: TCP
+      HealthCheckEnabled: true
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 8085
+      HealthCheckPath: !Sub "/bamboo/rest/api/latest/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group Bamboo Port 54663"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+  TargetGroupBamboo80:
+    Condition: IsBambooIncluded
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      #      Name: "${AWS::StackName}-TargetGroup" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: instance
+      Port: 8085
+      Protocol: HTTP
+      HealthCheckEnabled: true
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 8085
+      HealthCheckPath: !Sub "/bamboo/rest/api/latest/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      Matcher:
+        HttpCode: "200-399"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group Bamboo Port 80"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+  TargetGroupBamboo443:
+    Condition: IsBambooIncluded
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      #      Name: "${AWS::StackName}-TargetGroup" #32 char limit
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      TargetType: instance
+      Port: 8085
+      Protocol: HTTP
+      HealthCheckEnabled: true
+      IpAddressType: ipv4
+      HealthyThresholdCount: '2'
+      HealthCheckIntervalSeconds: '60'
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: 8085
+      HealthCheckPath: !Sub "/bamboo/rest/api/latest/status"
+      HealthCheckTimeoutSeconds: '29'
+      UnhealthyThresholdCount: '2'
+      Matcher:
+        HttpCode: "200-399"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName} Target Group Bamboo Port 443"
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+
+  listener80BambooForward:
+    Condition: IsBambooIncluded
+    DependsOn:
+     - Listener80
+     - TargetGroupBamboo80
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBamboo80
+      Conditions:
+        - Field: "path-pattern"
+          PathPatternConfig:
+            Values:
+              - "/bamboo*"
+      ListenerArn: !Ref Listener80
+      Priority: 2
+  listener443BambooForward:
+    Condition: IsBambooIncluded
+    DependsOn:
+    - Listener443
+    - TargetGroupBamboo443
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBamboo443
+      Conditions:
+        - Field: "path-pattern"
+          PathPatternConfig:
+            Values:
+              - "/bamboo*"
+      ListenerArn: !Ref Listener443
+      Priority: 2
+
+  NLBListener54663:
+    Condition: IsBambooIncluded
+    DependsOn:
+      - TargetGroupBamboo54663
+      - NetworkLoadBalancerELB2
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NetworkLoadBalancerELB2
+      Port: 54663
+      Protocol: "TCP"
+      DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
+        - Type: "forward"
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref TargetGroupBamboo54663
 Outputs:
   ClusterNodeGroup:
     Description: The name of the auto scaling group of cluster nodes
@@ -1833,3 +2695,4 @@ Outputs:
     Description: CloudWatch monitoring dashboard URL
     Value: !GetAtt CloudWatchDashboard.Outputs.Dashboard
     Condition: EnableCloudWatch
+
