@@ -1007,7 +1007,7 @@ Resources:
   ClusterNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
-      - LoadBalancer
+#      - LoadBalancer
       - TargetGroupBitbucket80
       - TargetGroupBitbucket443
       - TargetGroupBitbucket7999
@@ -1020,8 +1020,8 @@ Resources:
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
-      LoadBalancerNames:
-       - !Ref LoadBalancer
+#      LoadBalancerNames:
+#       - !Ref LoadBalancer
       TargetGroupARNs:
        - !Ref TargetGroupBitbucket80
        - !Ref TargetGroupBitbucket443
@@ -1041,10 +1041,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 4b65f636514401354e61aaaa9f1c4c3ec08d5b94"
+          Value: "COMMIT: 450401af7203d995a8d7f6e679aaf735d468f627"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-23T04:18:44Z"
+          Value: "TIMESTAMP: 2023-01-23T06:08:00Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1066,8 +1066,8 @@ Resources:
                   - !If  [IsBBAdminPasswordProvided, !Sub ["ATL_BB_ADMIN_PASSWORD=${BBAdminPassword}", BBAdminPassword: !Ref BitbucketAdminPassword], !Ref "AWS::NoValue"]
                   - !If  [IsLicenseKeyProvided, !Sub ["ATL_BB_LICENSEKEY='${LicenseKey}'", LicenseKey: !Ref BitbucketLicenseKey], !Ref "AWS::NoValue"]
                   - !If  [IsURLProvided, !Sub ["ATL_DATASET_URL=${DatasetURL}", DatasetURL: !Ref BitbucketDatasetURL], !Ref "AWS::NoValue"]
-                  - !Sub ["ATL_BB_BASEURL=${BaseURL}", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName }]]]
-                  - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt LoadBalancer.DNSName]]
+                  - !Sub ["ATL_BB_BASEURL=${BaseURL}", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]]
+                  - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName]]
                   - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY_BRANCH=${DeployRepositoryBranch}", DeployRepositoryBranch: !Ref "DeploymentAutomationBranch"]
@@ -1500,7 +1500,7 @@ Resources:
                   # NOTE: For simplicity we should keep this as close to the BB node version above.
 
                   - !Sub ["ATL_PRODUCT_VERSION=${BitbucketVersion}", BitbucketVersion: !Ref BitbucketVersion]
-                  - !Sub ["ATL_PROXY_NAME=${LoadBalancerDNSName}", LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName]
+                  - !Sub ["ATL_PROXY_NAME=${LoadBalancerDNSName}", LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName]
                   - ""
                   - !Sub ["ATL_AWS_REGION=${Region}", Region: !Ref "AWS::Region"]
                   - !Sub ["ATL_AWS_STACK_NAME=${StackName}", StackName: !Ref "AWS::StackName"]
@@ -1755,54 +1755,54 @@ Resources:
         ExportPrefix: !Ref ExportPrefix
         QSS3BucketName: !Ref QSS3BucketName
         QSS3KeyPrefix: !Ref QSS3KeyPrefix
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancing::LoadBalancer
-    Properties:
-      AppCookieStickinessPolicy:
-        - CookieName: BITBUCKETSESSIONID
-          PolicyName: SessionStickiness
-      ConnectionDrainingPolicy:
-        Enabled: true
-        Timeout: 300
-      ConnectionSettings:
-        IdleTimeout: 3600
-      CrossZone: true
-      Listeners:
-        - LoadBalancerPort: '80'
-          Protocol: HTTP
-          InstancePort: !If [DoSSL, '7991', '7990']
-          InstanceProtocol: HTTP
-          PolicyNames: [SessionStickiness]
-        - !If
-          - DoSSL
-          - LoadBalancerPort: '443'
-            Protocol: HTTPS
-            InstancePort: '7990'
-            InstanceProtocol: HTTP
-            PolicyNames:
-              - SessionStickiness
-            SSLCertificateId: !Ref SSLCertificateARN
-          - !Ref AWS::NoValue
-        - LoadBalancerPort: '7999'
-          Protocol: TCP
-          InstancePort: '7999'
-          InstanceProtocol: TCP
-      HealthCheck:
-        HealthyThreshold: '2'
-        Interval: '60'
-        Target: !Sub "HTTP:7990${BitbucketContextPath}/status"
-        Timeout: '29'
-        UnhealthyThreshold: '2'
-      Scheme: !If [UsePublicIp, 'internet-facing', 'internal']
-      SecurityGroups: [!Ref SecurityGroup]
-      Subnets: !Split
-        - ","
-        - Fn::ImportValue: !Sub "${ExportPrefix}PubNets"
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName} LoadBalancer"
-        - Key: Cluster
-          Value: !Ref AWS::StackName
+#  LoadBalancer:
+#    Type: AWS::ElasticLoadBalancing::LoadBalancer
+#    Properties:
+#      AppCookieStickinessPolicy:
+#        - CookieName: BITBUCKETSESSIONID
+#          PolicyName: SessionStickiness
+#      ConnectionDrainingPolicy:
+#        Enabled: true
+#        Timeout: 300
+#      ConnectionSettings:
+#        IdleTimeout: 3600
+#      CrossZone: true
+#      Listeners:
+#        - LoadBalancerPort: '80'
+#          Protocol: HTTP
+#          InstancePort: !If [DoSSL, '7991', '7990']
+#          InstanceProtocol: HTTP
+#          PolicyNames: [SessionStickiness]
+#        - !If
+#          - DoSSL
+#          - LoadBalancerPort: '443'
+#            Protocol: HTTPS
+#            InstancePort: '7990'
+#            InstanceProtocol: HTTP
+#            PolicyNames:
+#              - SessionStickiness
+#            SSLCertificateId: !Ref SSLCertificateARN
+#          - !Ref AWS::NoValue
+#        - LoadBalancerPort: '7999'
+#          Protocol: TCP
+#          InstancePort: '7999'
+#          InstanceProtocol: TCP
+#      HealthCheck:
+#        HealthyThreshold: '2'
+#        Interval: '60'
+#        Target: !Sub "HTTP:7990${BitbucketContextPath}/status"
+#        Timeout: '29'
+#        UnhealthyThreshold: '2'
+#      Scheme: !If [UsePublicIp, 'internet-facing', 'internal']
+#      SecurityGroups: [!Ref SecurityGroup]
+#      Subnets: !Split
+#        - ","
+#        - Fn::ImportValue: !Sub "${ExportPrefix}PubNets"
+#      Tags:
+#        - Key: Name
+#          Value: !Sub "${AWS::StackName} LoadBalancer"
+#        - Key: Cluster
+#          Value: !Ref AWS::StackName
   ## new elb2
   NetworkLoadBalancerELB2: #To allow TCP 7999 and http/https routing
     DependsOn:
@@ -2304,7 +2304,7 @@ Resources:
     Condition: IsBambooIncluded
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
-      - LoadBalancer
+#      - LoadBalancer
       - TargetGroupBamboo80
       - TargetGroupBamboo443
       - TargetGroupBamboo54663
@@ -2317,8 +2317,8 @@ Resources:
       LaunchConfigurationName: !Ref BambooClusterNodeLaunchConfig
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
-      LoadBalancerNames:
-        - !Ref LoadBalancer
+#      LoadBalancerNames:
+#        - !Ref LoadBalancer
       TargetGroupARNs:
         - !Ref TargetGroupBamboo80
         - !Ref TargetGroupBamboo443
@@ -2338,10 +2338,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 4b65f636514401354e61aaaa9f1c4c3ec08d5b94"
+          Value: "COMMIT: 450401af7203d995a8d7f6e679aaf735d468f627"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-23T04:18:44Z"
+          Value: "TIMESTAMP: 2023-01-23T06:08:00Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2370,10 +2370,10 @@ Resources:
 #                  - !If  [IsBambooImportPathProvided, !Sub ["atl_import_path=${atl_import_path}"], !Ref "AWS::NoValue"]
 #                  - !If  [IsBambooLicenseKeyProvided, !Sub ["ATL_LICENSEKEY='${BambooLicenseKey}'", LicenseKey: !Ref BitbucketLicenseKey], !Ref "AWS::NoValue"]
                   - !Sub ["atl_broker_uri=${atlBrokerUri}", atlBrokerUri: "nio://0.0.0.0:54663"]
-                  - !Sub ["atl_broker_client_uri=${atlBrokerClientUri}", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName }]]
-                  - !Sub ["ATL_BB_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName }]]]
+                  - !Sub ["atl_broker_client_uri=${atlBrokerClientUri}", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]
+                  - !Sub ["ATL_BB_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]]
                   - "TomcatContextPath=/bamboo"
-                  - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt LoadBalancer.DNSName]]
+                  - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName]]
                   - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY_BRANCH=${DeployRepositoryBranch}", DeployRepositoryBranch: !Ref "DeploymentAutomationBranch"]
@@ -2697,13 +2697,13 @@ Outputs:
       - !Sub
         - "${HTTP}://${LoadBalancerDNSName}"
         - HTTP: !If [DoSSL, https, http]
-          LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName
+          LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName
   LoadBalancerURL:
     Description: The Load Balancer URL
     Value: !Sub
       - "${HTTP}://${LoadBalancerDNSName}"
       - HTTP: !If [DoSSL, 'https', 'http']
-        LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName
+        LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName
   SGname:
     Description: The name of the SecurityGroup
     Value: !Ref SecurityGroup
