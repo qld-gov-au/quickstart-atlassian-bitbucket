@@ -71,10 +71,6 @@ Metadata:
       - Label:
           default: Advanced (Optional)
         Parameters:
-          - BambooIncluded
-          - BambooVersion
-          - BambooLicenseKey
-          - BambooDeploymentAutomationPlaybook
           - BitbucketContextPath
           - BitbucketProperties
           - JvmHeapOverride
@@ -89,12 +85,48 @@ Metadata:
           - BitbucketAdminPassword
           - BitbucketDatasetURL
       - Label:
+          default: Bamboo Settings (Optional)
+        Parameters:
+            - BambooIncluded
+            - BambooVersion
+            - BambooLicenseKey
+            - BambooDeploymentAutomationPlaybook
+            - BambooAdminUsername
+            - BambooAdminFullName
+            - BambooAdminPassword
+            - BambooAdminEmail
+            - BambooSecurityToken
+            - BambooImportOption
+            - BambooImportPath
+      - Label:
           default: AWS Quick Start Configuration
         Parameters:
           - QSS3BucketName
           - QSS3KeyPrefix
           - ExportPrefix
     ParameterLabels:
+      BambooIncluded:
+        default: Will Bamboo be included
+      BambooVersion:
+        default: Bamboo version
+      BambooLicenseKey:
+        default: Bamboo Licence Key
+      BambooDeploymentAutomationPlaybook:
+        default: Bamboo Ansible Deployment Playbook
+      BambooAdminUsername:
+        default: Bamboo administrator - Username
+      BambooAdminFullName:
+        default: Bamboo administrator - Full Name
+      BambooAdminPassword:
+        default: Bamboo administrator - Password
+      BambooAdminEmail:
+        default: Bamboo administrator - Email
+      BambooSecurityToken:
+        default: Bamboo Security token for Bamboo agents
+      BambooImportOption:
+        default: Bamboo Import Option (restore from shared archive?)
+      BambooImportPath:
+        default: Bamboo Import Full Folder path to bamboo backup archive.
       BitbucketProperties:
         default: Bitbucket properties
       BitbucketVersion:
@@ -203,6 +235,50 @@ Parameters:
       - "false"
     ConstraintDescription: Must be 'true' or 'false'.
     Type: String
+  BambooDeploymentAutomationPlaybook:
+    Default: "aws_bamboo_dc_node.yml"
+    Type: String
+    Description: The Ansible playbook to invoke to initialize the application node on first start.
+  BambooAdminUsername:
+    Default: ""
+    Description: '(Optional) Username for the Bamboo administrator account'
+    Type: String
+  BambooAdminFullName:
+    Default: ""
+    Description: '(Optional) Full Name of the Bamboo administrator account'
+    Type: String
+  BambooAdminPassword:
+    AllowedPattern: '((?=^.{0,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*)|(^$)'
+    ConstraintDescription: Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, 1 (non / @ " ') symbol
+    Description: (Optional) Password for the Bamboo administrator account.
+    MaxLength: 128
+    NoEcho: true
+    Type: String
+  BambooAdminEmail:
+    Default: ""
+    Description: '(Optional) Email for the Bamboo administrator account'
+    Type: String
+  BambooSecurityToken:
+    Default: ""
+    Description: '(Optional) Bamboo agent security token'
+    Type: String
+  BambooImportOption:
+    Default: "clean"
+    AllowedValues:
+      - "clean"
+      - "import"
+    Description: "(Optional) Import data from backup file during setup. Default value is 'clean' which skip import step and create Bamboo home from scratch. If value is 'import' then BambooImportPath should contain path to backup archive."
+    Type: String
+  BambooImportPath:
+    Default: ""
+    Description: '(Optional) Full path to backup archive. When Bamboo Import Option is set'
+    Type: String
+  BambooLicenseKey:
+    Default: ''
+    Description: "(Optional) Provide a license key for Bamboo Data Center if you have one."
+    NoEcho: true
+    Type: String
+
   BitbucketProperties:
     Default: ''
     Description: A space-separated list of bitbucket properties in the form 'key1=value1 key2=value2 ...' Find documentation at https://confluence.atlassian.com/x/m5ZKLg.
@@ -224,15 +300,10 @@ Parameters:
     Description: (Optional) Provide a license key for Bitbucket Data Center if you have one.
     NoEcho: true
     Type: String
-  BambooLicenseKey:
-    Default: ''
-    Description: (Optional) Provide a license key for Bamboo Data Center if you have one.
-    NoEcho: true
-    Type: String
   BitbucketAdminPassword:
     AllowedPattern: '((?=^.{0,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*)|(^$)'
     ConstraintDescription: Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, 1 (non / @ " ') symbol
-    Description: (Optional) Password for the Bitbucket administrator ('admin') account.
+    Description: (Optional) Password for the Bitbucket administrator account.
     MaxLength: 128
     NoEcho: true
     Type: String
@@ -376,10 +447,6 @@ Parameters:
     Description: The deployment automation repository branch to pull from.
   DeploymentAutomationPlaybook:
     Default: "aws_bitbucket_dc_node.yml"
-    Type: String
-    Description: The Ansible playbook to invoke to initialize the application node on first start.
-  BambooDeploymentAutomationPlaybook:
-    Default: "aws_bamboo_dc_node.yml"
     Type: String
     Description: The Ansible playbook to invoke to initialize the application node on first start.
   DeploymentAutomationCustomParams:
@@ -677,16 +744,12 @@ Parameters:
     Type: String
 
 Conditions:
-  IsBambooIncluded:
-    !Not [!Equals [!Ref BambooIncluded, '']]
   BitbucketContextPathProvided:
     !Not [!Equals [!Ref BitbucketContextPath, '']]
   IsURLProvided:
     !Not [!Equals [!Ref BitbucketDatasetURL, '']]
   IsLicenseKeyProvided:
     !Not [!Equals [!Ref BitbucketLicenseKey, '']]
-  IsBambooLicenseKeyProvided:
-    !Not [!Equals [!Ref BambooLicenseKey, '']]
   IsBBAdminPasswordProvided:
     !Not [!Equals [!Ref BitbucketAdminPassword, '']]
   DBProvisionedIops:
@@ -739,6 +802,25 @@ Conditions:
     - !Condition KeyProvided
   AllowSshCidrBlock:
     !Equals [!Ref CidrSshEnabled, true]
+
+  IsBambooIncluded:
+    !Not [!Equals [!Ref BambooIncluded, '']]
+  IsBambooLicenseKeyProvided:
+    !Not [!Equals [!Ref BambooLicenseKey, '']]
+  IsBambooAdminUsernameProvided:
+    !Not [!Equals [!Ref BambooAdminUsername, '']]
+  IsBambooAdminFullNameProvided:
+    !Not [!Equals [!Ref BambooAdminFullName, '']]
+  IsBambooAdminPasswordProvided:
+    !Not [!Equals [!Ref BambooAdminPassword, '']]
+  IsBambooAdminEmailProvided:
+    !Not [!Equals [!Ref BambooAdminEmail, '']]
+  IsBambooAgencySecurityTokenProvided:
+    !Not [!Equals [!Ref BambooSecurityToken, '']]
+  IsBambooImportOptionProvided:
+    !Not [!Equals [!Ref BambooImportOption, '']]
+  IsBambooImportPathProvided:
+    !Not [!Equals [!Ref BambooImportPath, '']]
 
 Mappings:
   AWSRegionArch2AMI:
@@ -1041,10 +1123,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 450401af7203d995a8d7f6e679aaf735d468f627"
+          Value: "COMMIT: 292f01664726dcf10f1e3dbdd0db5bb9594a3c55"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-23T06:08:00Z"
+          Value: "TIMESTAMP: 2023-01-24T03:42:15Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1884,7 +1966,7 @@ Resources:
   TargetGroupBitbucket80:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-#      Name: "${AWS::StackName}-TargetGroupBitbucket80" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
@@ -1935,7 +2017,7 @@ Resources:
     Condition: DoSSL
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-#      Name: "${AWS::StackName}-TargetGroupBitbucket443" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
@@ -2035,7 +2117,7 @@ Resources:
   TargetGroupBitbucket7999:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-#      Name: "${AWS::StackName}-TargetGroupBitbucket7999" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
@@ -2060,7 +2142,7 @@ Resources:
   TargetGroupBitbucketHttpALB:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      #      Name: "${AWS::StackName}-TargetGroupBitbucket7999" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: alb
@@ -2085,7 +2167,7 @@ Resources:
     Condition: DoSSL
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      #      Name: "${AWS::StackName}-TargetGroupBitbucket7999" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: alb
@@ -2338,10 +2420,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 450401af7203d995a8d7f6e679aaf735d468f627"
+          Value: "COMMIT: 292f01664726dcf10f1e3dbdd0db5bb9594a3c55"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-23T06:08:00Z"
+          Value: "TIMESTAMP: 2023-01-24T03:42:15Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2361,17 +2443,17 @@ Resources:
                   - "ATL_APP_DATA_MOUNT_ENABLED=false"
                   - ""
                   - !Sub ["ATL_PRODUCT_VERSION=${BambooVersion}", BambooVersion: !Ref BambooVersion]
-#                  - !If  [IsBBAdminPasswordProvided, !Sub ["bamboo.admin.username=${ atl_admin_username }"], !Ref "AWS::NoValue"]
-#                  - !If  [IsBBAdminFullNameProvided, !Sub ["bamboo.admin.fullname=${ atl_admin_fullname }"], !Ref "AWS::NoValue"]
-#                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_ADMIN_PASSWORD=${BBAdminPassword}", BBAdminPassword: !Ref BitbucketAdminPassword], !Ref "AWS::NoValue"]
-#                  - !If  [IsBambooAdminEmailProvided, !Sub ["bamboo.admin.email=${ atl_admin_email }"], !Ref "AWS::NoValue"]
-#                  - !If  [IsBambooAgencySecurityTokenProvided, !Sub ["bamboo.agent.security.token=${ security_token }}"], !Ref "AWS::NoValue"]
-#                  - !If  [IsBambooImportOptionProvided, !Sub ["atl_import_option=${ atl_import_option }"], !Ref "AWS::NoValue"]
-#                  - !If  [IsBambooImportPathProvided, !Sub ["atl_import_path=${atl_import_path}"], !Ref "AWS::NoValue"]
-#                  - !If  [IsBambooLicenseKeyProvided, !Sub ["ATL_LICENSEKEY='${BambooLicenseKey}'", LicenseKey: !Ref BitbucketLicenseKey], !Ref "AWS::NoValue"]
-                  - !Sub ["atl_broker_uri=${atlBrokerUri}", atlBrokerUri: "nio://0.0.0.0:54663"]
-                  - !Sub ["atl_broker_client_uri=${atlBrokerClientUri}", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]
-                  - !Sub ["ATL_BB_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]]
+                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_BAMBOO_ADMIN_USERNAME='${ atl_admin_username }'", atl_admin_username: !Ref BambooAdminUsername], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAdminFullNameProvided, !Sub ["ATL_BAMBOO_ADMIN_FULLNAME='${ atl_admin_fullname }'", atl_admin_fullname: !Ref BambooAdminFullName], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_ADMIN_PASSWORD='${BBAdminPassword}'", BBAdminPassword: !Ref BitbucketAdminPassword], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAdminEmailProvided, !Sub ["ATL_BAMBOO_ADMIN_EMAIL='${ atl_admin_email }'", atl_admin_email: !Ref BambooAdminEmail], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAgencySecurityTokenProvided, !Sub ["ATL_BAMBOO_SECURITY_TOKEN='${ security_token }}'", security_token: !Ref BambooSecurityToken], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooImportOptionProvided, !Sub ["ATL_BAMBOO_IMPORT_OPTION='${ atl_import_option }'", atl_import_option: !Ref BambooImportOption], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooImportPathProvided, !Sub ["ATL_BAMBOO_IMPORT_PATH='${atl_import_path}'", atl_import_path: !Ref BambooImportPath], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooLicenseKeyProvided, !Sub ["ATL_BAMBOO_LICENSEKEY='${LicenseKey}'", LicenseKey: !Ref BambooLicenseKey], !Ref "AWS::NoValue"]
+                  - !Sub ["ATL_BAMBOO_BROKER_URI='${atlBrokerUri}'", atlBrokerUri: "nio://0.0.0.0:54663"]
+                  - !Sub ["ATL_BAMBOO_BROKER_CLIENT_URI='${atlBrokerClientUri}'", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]
+                  - !Sub ["ATL_BAMBOO_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]]
                   - "TomcatContextPath=/bamboo"
                   - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName]]
                   - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
@@ -2548,7 +2630,7 @@ Resources:
     Condition: IsBambooIncluded
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      #      Name: "${AWS::StackName}-TargetGroup" #32 char limit
+      #Name:  #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
@@ -2573,7 +2655,7 @@ Resources:
     Condition: IsBambooIncluded
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      #      Name: "${AWS::StackName}-TargetGroup" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
@@ -2599,7 +2681,7 @@ Resources:
     Condition: IsBambooIncluded
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      #      Name: "${AWS::StackName}-TargetGroup" #32 char limit
+      #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
