@@ -1123,10 +1123,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 292f01664726dcf10f1e3dbdd0db5bb9594a3c55"
+          Value: "COMMIT: bc1ded4be4113e197d8f6eb89678640d57cdc23f"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-24T03:42:15Z"
+          Value: "TIMESTAMP: 2023-01-25T01:46:47Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -2420,10 +2420,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 292f01664726dcf10f1e3dbdd0db5bb9594a3c55"
+          Value: "COMMIT: bc1ded4be4113e197d8f6eb89678640d57cdc23f"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-24T03:42:15Z"
+          Value: "TIMESTAMP: 2023-01-25T01:46:47Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2443,18 +2443,19 @@ Resources:
                   - "ATL_APP_DATA_MOUNT_ENABLED=false"
                   - ""
                   - !Sub ["ATL_PRODUCT_VERSION=${BambooVersion}", BambooVersion: !Ref BambooVersion]
-                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_BAMBOO_ADMIN_USERNAME='${ atl_admin_username }'", atl_admin_username: !Ref BambooAdminUsername], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAdminUsernameProvided, !Sub ["ATL_BAMBOO_ADMIN_USERNAME='${ atl_admin_username }'", atl_admin_username: !Ref BambooAdminUsername], !Ref "AWS::NoValue"]
                   - !If  [IsBambooAdminFullNameProvided, !Sub ["ATL_BAMBOO_ADMIN_FULLNAME='${ atl_admin_fullname }'", atl_admin_fullname: !Ref BambooAdminFullName], !Ref "AWS::NoValue"]
-                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_ADMIN_PASSWORD='${BBAdminPassword}'", BBAdminPassword: !Ref BitbucketAdminPassword], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAdminPasswordProvided, !Sub ["ATL_BAMBOO_ADMIN_PASSWORD='${BambooAdminPassword}'", BambooAdminPassword: !Ref BambooAdminPassword], !Ref "AWS::NoValue"]
                   - !If  [IsBambooAdminEmailProvided, !Sub ["ATL_BAMBOO_ADMIN_EMAIL='${ atl_admin_email }'", atl_admin_email: !Ref BambooAdminEmail], !Ref "AWS::NoValue"]
-                  - !If  [IsBambooAgencySecurityTokenProvided, !Sub ["ATL_BAMBOO_SECURITY_TOKEN='${ security_token }}'", security_token: !Ref BambooSecurityToken], !Ref "AWS::NoValue"]
+                  - !If  [IsBambooAgencySecurityTokenProvided, !Sub ["ATL_BAMBOO_SECURITY_TOKEN='${ security_token }'", security_token: !Ref BambooSecurityToken], !Ref "AWS::NoValue"]
                   - !If  [IsBambooImportOptionProvided, !Sub ["ATL_BAMBOO_IMPORT_OPTION='${ atl_import_option }'", atl_import_option: !Ref BambooImportOption], !Ref "AWS::NoValue"]
                   - !If  [IsBambooImportPathProvided, !Sub ["ATL_BAMBOO_IMPORT_PATH='${atl_import_path}'", atl_import_path: !Ref BambooImportPath], !Ref "AWS::NoValue"]
                   - !If  [IsBambooLicenseKeyProvided, !Sub ["ATL_BAMBOO_LICENSEKEY='${LicenseKey}'", LicenseKey: !Ref BambooLicenseKey], !Ref "AWS::NoValue"]
                   - !Sub ["ATL_BAMBOO_BROKER_URI='${atlBrokerUri}'", atlBrokerUri: "nio://0.0.0.0:54663"]
                   - !Sub ["ATL_BAMBOO_BROKER_CLIENT_URI='${atlBrokerClientUri}'", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]
+                  - "ATL_TOMCAT_DEFAULTCONNECTORPORT=8085"
                   - !Sub ["ATL_BAMBOO_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]]
-                  - "TomcatContextPath=/bamboo"
+                  - "ATL_TOMCAT_CONTEXTPATH=/bamboo"
                   - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName]]
                   - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
