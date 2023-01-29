@@ -88,6 +88,7 @@ Metadata:
           default: Bamboo Settings (Optional)
         Parameters:
             - BambooIncluded
+            - BambooTomcatContextPath
             - BambooVersion
             - BambooLicenseKey
             - BambooDeploymentAutomationPlaybook
@@ -107,6 +108,8 @@ Metadata:
     ParameterLabels:
       BambooIncluded:
         default: Will Bamboo be included
+      BambooTomcatContextPath:
+        default: Bamboo Context Path
       BambooVersion:
         default: Bamboo version
       BambooLicenseKey:
@@ -234,6 +237,10 @@ Parameters:
       - "true"
       - "false"
     ConstraintDescription: Must be 'true' or 'false'.
+    Type: String
+  BambooTomcatContextPath:
+    Default: '/bamboo'
+    Description: "Context path, default is /bamboo"
     Type: String
   BambooDeploymentAutomationPlaybook:
     Default: "aws_bamboo_dc_node.yml"
@@ -1123,10 +1130,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: bc1ded4be4113e197d8f6eb89678640d57cdc23f"
+          Value: "COMMIT: 16dc95787d50661451c81a46e00b6b08d90c900d"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-25T01:46:47Z"
+          Value: "TIMESTAMP: 2023-01-29T22:31:29Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -2420,10 +2427,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: bc1ded4be4113e197d8f6eb89678640d57cdc23f"
+          Value: "COMMIT: 16dc95787d50661451c81a46e00b6b08d90c900d"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-25T01:46:47Z"
+          Value: "TIMESTAMP: 2023-01-29T22:31:29Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2454,8 +2461,10 @@ Resources:
                   - !Sub ["ATL_BAMBOO_BROKER_URI='${atlBrokerUri}'", atlBrokerUri: "nio://0.0.0.0:54663"]
                   - !Sub ["ATL_BAMBOO_BROKER_CLIENT_URI='${atlBrokerClientUri}'", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]
                   - "ATL_TOMCAT_DEFAULTCONNECTORPORT=8085"
-                  - !Sub ["ATL_BAMBOO_BASEURL=${BaseURL}/bamboo", BaseURL: !If [UseCustomDnsName, !Sub ["${HTTP}://${CustomDNSName}", { HTTP: !If [DoSSL, https, http], CustomDNSName: !Ref CustomDnsName }], !Sub ["${HTTP}://${LoadBalancerDNSName}", { HTTP: !If [DoSSL, https, http], LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]]
-                  - "ATL_TOMCAT_CONTEXTPATH=/bamboo"
+                  - !Sub ["ATL_BAMBOO_BASEURL=${HTTP}://${BaseURL}${BambooTomcatContextPath}", { HTTP: !If [DoSSL, https, http], BaseURL: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName ] , BambooTomcatContextPath: !Ref BambooTomcatContextPath }]
+                  - !Sub ["ATL_TOMCAT_CONTEXTPATH=${TomcatContextPath}", TomcatContextPath: !Ref BambooTomcatContextPath]
+                  - !Sub ["ATL_TOMCAT_SCHEME=${TomcatScheme}", TomcatScheme: !If [DoSSL, https, http]]
+                  - !Sub ["ATL_TOMCAT_SECURE=${TomcatSecure}", TomcatSecure: !If [DoSSL, true, false]]
                   - !Sub ["ATL_PROXY_NAME=${AtlProxyName}", AtlProxyName: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName]]
                   - !Sub ["ATL_FILESERVER_IP=${FileServerPrivateIp}", FileServerPrivateIp: !GetAtt FileServer.PrivateIp]
                   - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
@@ -2643,7 +2652,7 @@ Resources:
       HealthCheckIntervalSeconds: '60'
       HealthCheckProtocol: "HTTP"
       HealthCheckPort: 8085
-      HealthCheckPath: !Sub "/bamboo/rest/api/latest/status"
+      HealthCheckPath: !Sub "${BambooTomcatContextPath}/rest/api/latest/status"
       HealthCheckTimeoutSeconds: '29'
       UnhealthyThresholdCount: '2'
       Tags:
@@ -2668,7 +2677,7 @@ Resources:
       HealthCheckIntervalSeconds: '60'
       HealthCheckProtocol: "HTTP"
       HealthCheckPort: 8085
-      HealthCheckPath: !Sub "/bamboo/rest/api/latest/status"
+      HealthCheckPath: !Sub "${BambooTomcatContextPath}/rest/api/latest/status"
       HealthCheckTimeoutSeconds: '29'
       UnhealthyThresholdCount: '2'
       Matcher:
@@ -2694,7 +2703,7 @@ Resources:
       HealthCheckIntervalSeconds: '60'
       HealthCheckProtocol: "HTTP"
       HealthCheckPort: 8085
-      HealthCheckPath: !Sub "/bamboo/rest/api/latest/status"
+      HealthCheckPath: !Sub "${BambooTomcatContextPath}/rest/api/latest/status"
       HealthCheckTimeoutSeconds: '29'
       UnhealthyThresholdCount: '2'
       Matcher:
@@ -2721,7 +2730,7 @@ Resources:
         - Field: "path-pattern"
           PathPatternConfig:
             Values:
-              - "/bamboo*"
+              - !Sub "${BambooTomcatContextPath}*"
       ListenerArn: !Ref Listener80
       Priority: 2
   listener443BambooForward:
@@ -2740,7 +2749,7 @@ Resources:
         - Field: "path-pattern"
           PathPatternConfig:
             Values:
-              - "/bamboo*"
+              - !Sub "${BambooTomcatContextPath}*"
       ListenerArn: !Ref Listener443
       Priority: 2
 
