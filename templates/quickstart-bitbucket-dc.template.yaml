@@ -96,6 +96,7 @@ Metadata:
             - BambooAdminFullName
             - BambooAdminPassword
             - BambooAdminEmail
+            - UseCustomDnsNameOnBrokerClientUri
             - BambooSecurityToken
             - BambooImportOption
             - BambooImportPath
@@ -124,6 +125,8 @@ Metadata:
         default: Bamboo administrator - Password
       BambooAdminEmail:
         default: Bamboo administrator - Email
+      UseCustomDnsNameOnBrokerClientUri:
+        default: Bamboo Broker Client Uri, use Custom DNS or ELB domain name
       BambooSecurityToken:
         default: Bamboo Security token for Bamboo agents
       BambooImportOption:
@@ -264,6 +267,13 @@ Parameters:
   BambooAdminEmail:
     Default: ""
     Description: '(Optional) Email for the Bamboo administrator account'
+    Type: String
+  UseCustomDnsNameOnBrokerClientUri:
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: 'Sometimes you want bamboo agents to connect direct to load balancer instead of domain name for broker tcp port'
     Type: String
   BambooSecurityToken:
     Default: ""
@@ -822,6 +832,9 @@ Conditions:
     !Not [!Equals [!Ref BambooAdminPassword, '']]
   IsBambooAdminEmailProvided:
     !Not [!Equals [!Ref BambooAdminEmail, '']]
+  IsUseCustomDnsNameOnBrokerClientUri: !And
+    - !Condition UseCustomDnsName
+    - !Equals [!Ref UseCustomDnsNameOnBrokerClientUri, 'true']
   IsBambooAgencySecurityTokenProvided:
     !Not [!Equals [!Ref BambooSecurityToken, '']]
   IsBambooImportOptionProvided:
@@ -1130,10 +1143,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 16dc95787d50661451c81a46e00b6b08d90c900d"
+          Value: "COMMIT: b2725994fdaf5307b2a004cdd4b7a26d5328d60e"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-29T22:31:29Z"
+          Value: "TIMESTAMP: 2023-01-30T23:11:20Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1807,7 +1820,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName} Bitbucket PostgreSQL Database"
-      VPCSecurityGroups: [!Ref SecurityGroup]
+      VPCSecurityGroups: [!Ref SecurityGroupDB]
       PreferredMaintenanceWindow: !Ref DBPreferredMaintenanceWindow
       PreferredBackupWindow: !Ref DBPreferredBackupWindow
       AutoMinorVersionUpgrade: true
@@ -1839,59 +1852,12 @@ Resources:
         DBIops: !Ref DBIops
         DBMasterUserPassword: !Ref DBMasterUserPassword
         DBMultiAZ: !Ref DBMultiAZ
-        DBSecurityGroup: !Ref SecurityGroup
+        DBSecurityGroup: !Ref SecurityGroupDB
         DBStorageType: !Ref DBStorageType
         ExportPrefix: !Ref ExportPrefix
         QSS3BucketName: !Ref QSS3BucketName
         QSS3KeyPrefix: !Ref QSS3KeyPrefix
-#  LoadBalancer:
-#    Type: AWS::ElasticLoadBalancing::LoadBalancer
-#    Properties:
-#      AppCookieStickinessPolicy:
-#        - CookieName: BITBUCKETSESSIONID
-#          PolicyName: SessionStickiness
-#      ConnectionDrainingPolicy:
-#        Enabled: true
-#        Timeout: 300
-#      ConnectionSettings:
-#        IdleTimeout: 3600
-#      CrossZone: true
-#      Listeners:
-#        - LoadBalancerPort: '80'
-#          Protocol: HTTP
-#          InstancePort: !If [DoSSL, '7991', '7990']
-#          InstanceProtocol: HTTP
-#          PolicyNames: [SessionStickiness]
-#        - !If
-#          - DoSSL
-#          - LoadBalancerPort: '443'
-#            Protocol: HTTPS
-#            InstancePort: '7990'
-#            InstanceProtocol: HTTP
-#            PolicyNames:
-#              - SessionStickiness
-#            SSLCertificateId: !Ref SSLCertificateARN
-#          - !Ref AWS::NoValue
-#        - LoadBalancerPort: '7999'
-#          Protocol: TCP
-#          InstancePort: '7999'
-#          InstanceProtocol: TCP
-#      HealthCheck:
-#        HealthyThreshold: '2'
-#        Interval: '60'
-#        Target: !Sub "HTTP:7990${BitbucketContextPath}/status"
-#        Timeout: '29'
-#        UnhealthyThreshold: '2'
-#      Scheme: !If [UsePublicIp, 'internet-facing', 'internal']
-#      SecurityGroups: [!Ref SecurityGroup]
-#      Subnets: !Split
-#        - ","
-#        - Fn::ImportValue: !Sub "${ExportPrefix}PubNets"
-#      Tags:
-#        - Key: Name
-#          Value: !Sub "${AWS::StackName} LoadBalancer"
-#        - Key: Cluster
-#          Value: !Ref AWS::StackName
+
   ## new elb2
   NetworkLoadBalancerELB2: #To allow TCP 7999 and http/https routing
     DependsOn:
@@ -2243,6 +2209,9 @@ Resources:
               - TargetGroupArn: !Ref TargetGroupBitbucketHttpsALB
 
   ##end new elb2
+
+  # Due to Network Load Balancers not being able to have Security Groups attached.
+  # You need to whitelist their ip directly for health checks to work. Also the ec2 sg is the controller of the NLB passthrough
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -2268,10 +2237,13 @@ Resources:
           FromPort: 7999
           ToPort: 7999
           CidrIp: !Ref CidrBlock
-        - IpProtocol: tcp
-          FromPort: 54663
-          ToPort: 54663
-          CidrIp: !Ref CidrBlock
+        - !If
+          - IsBambooIncluded
+          - IpProtocol: tcp
+            FromPort: 54663
+            ToPort: 54663
+            CidrIp: !Ref CidrBlock
+          - Ref: AWS::NoValue
         - !If
           - UseBastionHost
           - IpProtocol: tcp
@@ -2328,6 +2300,25 @@ Resources:
       FromPort: -1
       ToPort: -1
       SourceSecurityGroupId: !Ref SecurityGroup
+
+
+  SecurityGroupDB:
+    DependsOn: SecurityGroup
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for DB
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432 # PostgreSQL
+          SourceSecurityGroupId: !Ref SecurityGroup
+          Description: "Application access to PostgreSQL"
+      Tags:
+        - Key: Name
+          Value: !Join [' ', [!Ref 'AWS::StackName', db, sg]]
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+
   AnsibleRepoPinSHA:
     Type: AWS::SSM::Parameter
     Properties:
@@ -2427,10 +2418,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 16dc95787d50661451c81a46e00b6b08d90c900d"
+          Value: "COMMIT: b2725994fdaf5307b2a004cdd4b7a26d5328d60e"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-29T22:31:29Z"
+          Value: "TIMESTAMP: 2023-01-30T23:11:20Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2459,7 +2450,7 @@ Resources:
                   - !If  [IsBambooImportPathProvided, !Sub ["ATL_BAMBOO_IMPORT_PATH='${atl_import_path}'", atl_import_path: !Ref BambooImportPath], !Ref "AWS::NoValue"]
                   - !If  [IsBambooLicenseKeyProvided, !Sub ["ATL_BAMBOO_LICENSEKEY='${LicenseKey}'", LicenseKey: !Ref BambooLicenseKey], !Ref "AWS::NoValue"]
                   - !Sub ["ATL_BAMBOO_BROKER_URI='${atlBrokerUri}'", atlBrokerUri: "nio://0.0.0.0:54663"]
-                  - !Sub ["ATL_BAMBOO_BROKER_CLIENT_URI='${atlBrokerClientUri}'", atlBrokerClientUri: !Sub ["failover:(tcp://${LoadBalancerDNSName}54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  LoadBalancerDNSName: !GetAtt NetworkLoadBalancerELB2.DNSName }]]
+                  - !Sub ["ATL_BAMBOO_BROKER_CLIENT_URI='${atlBrokerClientUri}'", atlBrokerClientUri: !Sub ["failover:(tcp://${BaseURL}:54663?wireFormat.maxInactivityDuration=300000)?initialReconnectDelay=15000&amp;maxReconnectAttempts=10", {  BaseURL: !If [IsUseCustomDnsNameOnBrokerClientUri, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName ]  }]]
                   - "ATL_TOMCAT_DEFAULTCONNECTORPORT=8085"
                   - !Sub ["ATL_BAMBOO_BASEURL=${HTTP}://${BaseURL}${BambooTomcatContextPath}", { HTTP: !If [DoSSL, https, http], BaseURL: !If [UseCustomDnsName, !Ref CustomDnsName, !GetAtt NetworkLoadBalancerELB2.DNSName ] , BambooTomcatContextPath: !Ref BambooTomcatContextPath }]
                   - !Sub ["ATL_TOMCAT_CONTEXTPATH=${TomcatContextPath}", TomcatContextPath: !Ref BambooTomcatContextPath]
