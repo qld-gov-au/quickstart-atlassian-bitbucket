@@ -1117,9 +1117,7 @@ Resources:
   ClusterNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
-#      - LoadBalancer
-      - TargetGroupBitbucket80
-      - TargetGroupBitbucket443WaitHandle
+      - TargetGroupBitbucket
       - TargetGroupBitbucket7999
     CreationPolicy:
       ResourceSignal:
@@ -1131,8 +1129,7 @@ Resources:
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
       TargetGroupARNs:
-       - !Ref TargetGroupBitbucket80
-       - !If [DoSSL, TargetGroupBitbucket443, !Ref AWS::NoValue]
+       - !Ref TargetGroupBitbucket
        - !Ref TargetGroupBitbucket7999
       VPCZoneIdentifier:
         - !Select
@@ -1149,10 +1146,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 02a5a3d83f6f25f14526a3c9ceb762451f8a37dd"
+          Value: "COMMIT: 820fb6554d4fc87ca60e1bd5b6b4c6dfb7bd7177"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-01T00:11:23Z"
+          Value: "TIMESTAMP: 2023-02-01T03:17:13Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1464,7 +1461,7 @@ Resources:
         EBSEnabled: true
         VolumeSize: !Ref ElasticsearchNodeVolumeSize
         VolumeType: gp2
-      ElasticsearchVersion: "6.8" #min 7.10 for bitbucket 8
+      ElasticsearchVersion: "7.10"# "6.8" #min 7.10 for bitbucket 8
       ElasticsearchClusterConfig:
         InstanceType: !Ref ElasticsearchInstanceType
       AccessPolicies:
@@ -1942,14 +1939,14 @@ Resources:
         - Key: Cluster
           Value: !Ref AWS::StackName
 
-  TargetGroupBitbucket80:
+  TargetGroupBitbucket:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       #Name: #32 char limit
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
       TargetType: instance
-      Port: !If [ DoSSL, '7991', '7990' ]
+      Port: '7990'
       Protocol: HTTP
       HealthCheckEnabled: true
       IpAddressType: ipv4
@@ -1975,77 +1972,35 @@ Resources:
         - Key: Cluster
           Value: !Ref AWS::StackName
   Listener80:
-    DependsOn:
-      - TargetGroupBitbucket80
-      - LoadBalancerELB2
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref LoadBalancerELB2
       Port: 80
       Protocol: "HTTP"
       DefaultActions: #AWS::ElasticLoadBalancingV2::Listener Action
-        - Type: "forward"
-          ForwardConfig:
-            TargetGroups:
-              - TargetGroupArn: !Ref TargetGroupBitbucket80
-            TargetGroupStickinessConfig:
-              Enabled: true
-              DurationSeconds: 500 #1-604800 seconds (7 days).
-
-  TargetGroupBitbucket443WaitHandleInternal:
-    Condition: DoSSL
-    DependsOn: TargetGroupBitbucket443
-    Type: "AWS::CloudFormation::WaitConditionHandle"
-
-  WaitHandleSkip:
-    Type: "AWS::CloudFormation::WaitConditionHandle"
-
-  TargetGroupBitbucket443WaitHandle:
-    Type: "AWS::CloudFormation::WaitCondition"
-    Properties:
-      Handle: !If [ DoSSL, !Ref TargetGroupBitbucket443WaitHandleInternal, !Ref WaitHandleSkip ]
-      Timeout: "1"
-      Count: 0
-
-  TargetGroupBitbucket443:
-    Condition: DoSSL
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      #Name: #32 char limit
-      VpcId:
-        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
-      TargetType: instance
-      Port: 7990
-      Protocol: HTTP
-      HealthCheckEnabled: true
-      IpAddressType: ipv4
-      HealthyThresholdCount: '2'
-      HealthCheckIntervalSeconds: '60'
-      HealthCheckProtocol: "HTTP"
-      HealthCheckPort: 7990
-      HealthCheckPath: !Sub "${BitbucketContextPath}/status"
-      HealthCheckTimeoutSeconds: '29'
-      UnhealthyThresholdCount: '2'
-      TargetGroupAttributes:
-        - Key: stickiness.enabled
-          Value: true
-        - Key: stickiness.type
-          Value: app_cookie
-        - Key: stickiness.app_cookie.cookie_name
-          Value: BITBUCKETSESSIONID
-        - Key: deregistration_delay.timeout_seconds
-          Value: '300'
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName} Target Group Bitbucket Port 433"
-        - Key: Cluster
-          Value: !Ref AWS::StackName
+        - !If
+          - DoSSL
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              Host: '#{host}'
+              Path: '/#{path}'
+              Query: '#{query}'
+              StatusCode: HTTP_301
+          - Type: "forward"
+            ForwardConfig:
+              TargetGroups:
+                - TargetGroupArn: !Ref TargetGroupBitbucket
+              TargetGroupStickinessConfig:
+                Enabled: true
+                DurationSeconds: 500 #1-604800 seconds (7 days).
 
   Listener443:
     Condition: DoSSL
     DependsOn:
-      - TargetGroupBitbucket443WaitHandle
       - LoadBalancerELB2
+      - TargetGroupBitbucket
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref LoadBalancerELB2
@@ -2058,7 +2013,7 @@ Resources:
         - Type: "forward"
           ForwardConfig:
             TargetGroups:
-              - TargetGroupArn: !Ref TargetGroupBitbucket443
+              - TargetGroupArn: !Ref TargetGroupBitbucket
             TargetGroupStickinessConfig:
               Enabled: true
               DurationSeconds: 500 #1-604800 seconds (7 days).
@@ -2159,6 +2114,9 @@ Resources:
           Value: !Ref AWS::StackName
   TargetGroupBitbucketHttpsALB:
     Condition: DoSSL
+    DependsOn:
+     - LoadBalancerELB2
+     - Listener443
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       #Name: #32 char limit
@@ -2405,9 +2363,7 @@ Resources:
     Condition: IsBambooIncluded
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
-#      - LoadBalancer
-      - TargetGroupBamboo80
-      - TargetGroupBamboo443WaitHandle
+      - TargetGroupBamboo
       - TargetGroupBamboo54663
     CreationPolicy:
       ResourceSignal:
@@ -2419,8 +2375,7 @@ Resources:
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
       TargetGroupARNs:
-        - !Ref TargetGroupBamboo80
-        - !If [DoSSL, !Ref TargetGroupBamboo443, !Ref AWS::NoValue]
+        - !Ref TargetGroupBamboo
         - !Ref TargetGroupBamboo54663
       VPCZoneIdentifier:
         - !Select
@@ -2437,10 +2392,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 02a5a3d83f6f25f14526a3c9ceb762451f8a37dd"
+          Value: "COMMIT: 820fb6554d4fc87ca60e1bd5b6b4c6dfb7bd7177"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-01T00:11:23Z"
+          Value: "TIMESTAMP: 2023-02-01T03:17:13Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2671,7 +2626,7 @@ Resources:
         - Key: Cluster
           Value: !Ref AWS::StackName
 
-  TargetGroupBamboo80:
+  TargetGroupBamboo:
     Condition: IsBambooIncluded
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -2698,59 +2653,18 @@ Resources:
         - Key: Cluster
           Value: !Ref AWS::StackName
 
-
-  TargetGroupBamboo443WaitHandleInternal:
-    Condition: DoSSLBamboo
-    DependsOn: TargetGroupBamboo443
-    Type: "AWS::CloudFormation::WaitConditionHandle"
-
-
-  TargetGroupBamboo443WaitHandle:
-    Type: "AWS::CloudFormation::WaitCondition"
-    Properties:
-      Handle: !If [ DoSSLBamboo, !Ref TargetGroupBamboo443WaitHandleInternal, !Ref WaitHandleSkip ]
-      Timeout: "1"
-      Count: 0
-
-  TargetGroupBamboo443:
-    Condition: DoSSLBamboo
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      #Name: #32 char limit
-      VpcId:
-        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
-      TargetType: instance
-      Port: 8085
-      Protocol: HTTP
-      HealthCheckEnabled: true
-      IpAddressType: ipv4
-      HealthyThresholdCount: '2'
-      HealthCheckIntervalSeconds: '60'
-      HealthCheckProtocol: "HTTP"
-      HealthCheckPort: 8085
-      HealthCheckPath: !Sub "${BambooTomcatContextPath}/rest/api/latest/status"
-      HealthCheckTimeoutSeconds: '29'
-      UnhealthyThresholdCount: '2'
-      Matcher:
-        HttpCode: "200-399"
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName} Target Group Bamboo Port 443"
-        - Key: Cluster
-          Value: !Ref AWS::StackName
-
   listener80BambooForward:
     Condition: IsBambooIncluded
     DependsOn:
      - Listener80
-     - TargetGroupBamboo80
+     - TargetGroupBamboo
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
       Actions:
         - Type: "forward"
           ForwardConfig:
             TargetGroups:
-              - TargetGroupArn: !Ref TargetGroupBamboo80
+              - TargetGroupArn: !Ref TargetGroupBamboo
       Conditions:
         - Field: "path-pattern"
           PathPatternConfig:
@@ -2762,14 +2676,14 @@ Resources:
     Condition: DoSSLBamboo
     DependsOn:
     - Listener443
-    - TargetGroupBamboo443
+    - TargetGroupBamboo
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
       Actions:
         - Type: "forward"
           ForwardConfig:
             TargetGroups:
-              - TargetGroupArn: !Ref TargetGroupBamboo443
+              - TargetGroupArn: !Ref TargetGroupBamboo
       Conditions:
         - Field: "path-pattern"
           PathPatternConfig:
