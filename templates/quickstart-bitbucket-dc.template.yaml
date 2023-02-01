@@ -791,6 +791,10 @@ Conditions:
     !Not [!Equals [!Ref CustomDnsName, '']]
   DoSSL:
     !Not [!Equals [!Ref SSLCertificateARN, '']]
+  DoSSLBitbucketContextPathProvided:
+    !And
+    - Condition: BitbucketContextPathProvided
+    - Condition: DoSSL
   NotStandbyMode:
     !Equals [!Ref DBMaster, '']
   KeyProvided:
@@ -822,6 +826,10 @@ Conditions:
 
   IsBambooIncluded:
     !Not [!Equals [!Ref BambooIncluded, '']]
+  DoSSLBamboo:
+    !And
+     - Condition: IsBambooIncluded
+     - Condition: DoSSL
   IsBambooLicenseKeyProvided:
     !Not [!Equals [!Ref BambooLicenseKey, '']]
   IsBambooAdminUsernameProvided:
@@ -1111,7 +1119,7 @@ Resources:
     DependsOn:
 #      - LoadBalancer
       - TargetGroupBitbucket80
-      - TargetGroupBitbucket443
+      - TargetGroupBitbucket443WaitHandle
       - TargetGroupBitbucket7999
     CreationPolicy:
       ResourceSignal:
@@ -1122,11 +1130,9 @@ Resources:
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
-#      LoadBalancerNames:
-#       - !Ref LoadBalancer
       TargetGroupARNs:
        - !Ref TargetGroupBitbucket80
-       - !Ref TargetGroupBitbucket443
+       - !If [DoSSL, TargetGroupBitbucket443, !Ref AWS::NoValue]
        - !Ref TargetGroupBitbucket7999
       VPCZoneIdentifier:
         - !Select
@@ -1143,10 +1149,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: b2725994fdaf5307b2a004cdd4b7a26d5328d60e"
+          Value: "COMMIT: 02a5a3d83f6f25f14526a3c9ceb762451f8a37dd"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-30T23:11:20Z"
+          Value: "TIMESTAMP: 2023-02-01T00:11:23Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1986,6 +1992,21 @@ Resources:
               Enabled: true
               DurationSeconds: 500 #1-604800 seconds (7 days).
 
+  TargetGroupBitbucket443WaitHandleInternal:
+    Condition: DoSSL
+    DependsOn: TargetGroupBitbucket443
+    Type: "AWS::CloudFormation::WaitConditionHandle"
+
+  WaitHandleSkip:
+    Type: "AWS::CloudFormation::WaitConditionHandle"
+
+  TargetGroupBitbucket443WaitHandle:
+    Type: "AWS::CloudFormation::WaitCondition"
+    Properties:
+      Handle: !If [ DoSSL, !Ref TargetGroupBitbucket443WaitHandleInternal, !Ref WaitHandleSkip ]
+      Timeout: "1"
+      Count: 0
+
   TargetGroupBitbucket443:
     Condition: DoSSL
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -2023,7 +2044,7 @@ Resources:
   Listener443:
     Condition: DoSSL
     DependsOn:
-      - TargetGroupBitbucket443
+      - TargetGroupBitbucket443WaitHandle
       - LoadBalancerELB2
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -2043,7 +2064,7 @@ Resources:
               DurationSeconds: 500 #1-604800 seconds (7 days).
 
   listener443RootRedirectRule1:
-    Condition: BitbucketContextPathProvided
+    Condition: DoSSLBitbucketContextPathProvided
     DependsOn:
      - Listener443
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
@@ -2386,7 +2407,7 @@ Resources:
     DependsOn:
 #      - LoadBalancer
       - TargetGroupBamboo80
-      - TargetGroupBamboo443
+      - TargetGroupBamboo443WaitHandle
       - TargetGroupBamboo54663
     CreationPolicy:
       ResourceSignal:
@@ -2397,11 +2418,9 @@ Resources:
       LaunchConfigurationName: !Ref BambooClusterNodeLaunchConfig
       MinSize: !If [StandbyMode, '0', !Ref ClusterNodeMin]
       MaxSize: !Ref ClusterNodeMax
-#      LoadBalancerNames:
-#        - !Ref LoadBalancer
       TargetGroupARNs:
         - !Ref TargetGroupBamboo80
-        - !Ref TargetGroupBamboo443
+        - !If [DoSSL, !Ref TargetGroupBamboo443, !Ref AWS::NoValue]
         - !Ref TargetGroupBamboo54663
       VPCZoneIdentifier:
         - !Select
@@ -2418,10 +2437,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: b2725994fdaf5307b2a004cdd4b7a26d5328d60e"
+          Value: "COMMIT: 02a5a3d83f6f25f14526a3c9ceb762451f8a37dd"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-01-30T23:11:20Z"
+          Value: "TIMESTAMP: 2023-02-01T00:11:23Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
@@ -2678,8 +2697,23 @@ Resources:
           Value: !Sub "${AWS::StackName} Target Group Bamboo Port 80"
         - Key: Cluster
           Value: !Ref AWS::StackName
+
+
+  TargetGroupBamboo443WaitHandleInternal:
+    Condition: DoSSLBamboo
+    DependsOn: TargetGroupBamboo443
+    Type: "AWS::CloudFormation::WaitConditionHandle"
+
+
+  TargetGroupBamboo443WaitHandle:
+    Type: "AWS::CloudFormation::WaitCondition"
+    Properties:
+      Handle: !If [ DoSSLBamboo, !Ref TargetGroupBamboo443WaitHandleInternal, !Ref WaitHandleSkip ]
+      Timeout: "1"
+      Count: 0
+
   TargetGroupBamboo443:
-    Condition: IsBambooIncluded
+    Condition: DoSSLBamboo
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       #Name: #32 char limit
@@ -2725,7 +2759,7 @@ Resources:
       ListenerArn: !Ref Listener80
       Priority: 2
   listener443BambooForward:
-    Condition: IsBambooIncluded
+    Condition: DoSSLBamboo
     DependsOn:
     - Listener443
     - TargetGroupBamboo443
