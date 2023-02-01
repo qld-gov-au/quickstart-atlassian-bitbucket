@@ -1146,10 +1146,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 4ae225ed84237e17e50f5e45aecb407ebaf90e54"
+          Value: "COMMIT: 4a60a824dcf0db721266321b17a3b9ea85d6145c"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-01T06:08:14Z"
+          Value: "TIMESTAMP: 2023-02-01T07:16:23Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -2122,7 +2122,7 @@ Resources:
         - Type: redirect
           RedirectConfig:
             Host: "#{host}"
-            Path: !Sub "/${BitbucketContextPath}"
+            Path: !Sub "${BitbucketContextPath}"
             Port: "#{port}"
             Protocol: "#{protocol}"
             Query: ""
@@ -2144,7 +2144,7 @@ Resources:
         - Type: redirect
           RedirectConfig:
             Host: "#{host}"
-            Path: !Sub "/${BitbucketContextPath}"
+            Path: !Sub "${BitbucketContextPath}"
             Port: "#{port}"
             Protocol: "#{protocol}"
             Query: ""
@@ -2485,10 +2485,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 4ae225ed84237e17e50f5e45aecb407ebaf90e54"
+          Value: "COMMIT: 4a60a824dcf0db721266321b17a3b9ea85d6145c"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-01T06:08:14Z"
+          Value: "TIMESTAMP: 2023-02-01T07:16:23Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
