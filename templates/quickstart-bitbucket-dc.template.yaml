@@ -1146,10 +1146,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 820fb6554d4fc87ca60e1bd5b6b4c6dfb7bd7177"
+          Value: "COMMIT: 4ae225ed84237e17e50f5e45aecb407ebaf90e54"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-01T03:17:13Z"
+          Value: "TIMESTAMP: 2023-02-01T06:08:14Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -1801,6 +1801,7 @@ Resources:
             - logs:CreateLogStream
             - logs:PutLogEvents
             Resource: !Sub "arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/aws/lambda/*DBNameGenerator*"
+
   DB:
     Type: AWS::RDS::DBInstance
     Condition: DBEnginePostgres
@@ -1890,6 +1891,99 @@ Resources:
           Value: !Sub "${AWS::StackName} Network LoadBalancer"
         - Key: Cluster
           Value: !Ref AWS::StackName
+
+  #Network Load Balancer health checks, need internal ip to approve connectivity
+  InternalNLBIp4List:
+    DependsOn: NetworkLoadBalancerELB2
+    Type: Custom::InternalNLBIp4ListCollector
+    Version: 1.0
+    Properties:
+      ServiceToken: !GetAtt InternalNLBIp4ListCollector.Arn
+      ELBv2Arn: !Ref NetworkLoadBalancerELB2
+      StackName: !Ref 'AWS::StackName'
+  InternalNLBIp4ListCollector:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt InternalNLBIp4ListCollectorExecutionRole.Arn
+      Runtime: python3.7
+      Timeout: 120
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+
+          def lambda_handler(event, context):
+            elbv2 = boto3.client('elbv2')
+            ec2 = boto3.client('ec2')
+            elb2arn = event['ResourceProperties']['ELBv2Arn']
+            response = elbv2.describe_load_balancers(LoadBalancerArns=[elb2arn])
+            name = response['LoadBalancers'][0]['LoadBalancerName']
+            elbtype = response['LoadBalancers'][0]['Type']
+            filters = [{'Name': 'description', 'Values': ['ELB '+ elbtype[0:3] + '/' + name + '*']}]
+            eni_response = ec2.describe_network_interfaces(Filters=filters)
+            ip_addresses = [eni['PrivateIpAddress'] for eni in eni_response['NetworkInterfaces']]
+            ip_addresses_cidr = [eni['PrivateIpAddress'] + '/32' for eni in eni_response['NetworkInterfaces']]
+            print (ip_addresses)
+            responseData = {}
+            responseData['PrivateIpAddresses'] = ip_addresses
+            responseData['PrivateIpCidrAddresses'] = ip_addresses_cidr
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+
+  InternalNLBIp4ListCollectorExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/aws/lambda/*InternalNLBIp4ListCollector*"
+              - Effect: Allow
+                Action:
+                  - "elasticloadbalancing:DescribeLoadBalancers"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+
+  #NLB ip's need to be whitelisted to allow health checks to pass
+  SecurityGroupIngressNLB:
+    DependsOn:
+      - InternalNLBIp4List
+      - SecurityGroup
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: "-1"
+      FromPort: -1
+      ToPort: -1
+      CidrIp: !Select [ 0, !GetAtt InternalNLBIp4List.PrivateIpCidrAddresses ]
+
+  SecurityGroupIngressNLB2: #ELB in 2 subnets, will have 2 ip's
+    DependsOn:
+      - InternalNLBIp4List
+      - SecurityGroup
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: "-1"
+      FromPort: -1
+      ToPort: -1
+      CidrIp: !Select [ 1, !GetAtt InternalNLBIp4List.PrivateIpCidrAddresses ]
 
   LoadBalancerELB2:
     DependsOn:
@@ -2280,7 +2374,6 @@ Resources:
       ToPort: -1
       SourceSecurityGroupId: !Ref SecurityGroup
 
-
   SecurityGroupDB:
     DependsOn: SecurityGroup
     Type: AWS::EC2::SecurityGroup
@@ -2392,10 +2485,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: 820fb6554d4fc87ca60e1bd5b6b4c6dfb7bd7177"
+          Value: "COMMIT: 4ae225ed84237e17e50f5e45aecb407ebaf90e54"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-01T03:17:13Z"
+          Value: "TIMESTAMP: 2023-02-01T06:08:14Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
