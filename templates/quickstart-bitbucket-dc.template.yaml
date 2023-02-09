@@ -248,6 +248,8 @@ Parameters:
     Default: t3a.medium
     AllowedValues:
       - t3a.medium
+      - t3a.large
+      - t3a.xlarge
       - c4.large
       - c4.xlarge
       - c4.2xlarge
@@ -1246,10 +1248,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: d6ebe59b5ccdd204a7edc72ab6f0f89d575ac6f8"
+          Value: "COMMIT: aa2ff7d7604bfd22288fd2da7f0e6fa00f1d1dce"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-09T03:14:41Z"
+          Value: "TIMESTAMP: 2023-02-09T03:33:02Z"
           PropagateAtLaunch: true
   ClusterNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -2585,10 +2587,10 @@ Resources:
           PropagateAtLaunch: true
         # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
         - Key: "atl:quickstart:commit-id"
-          Value: "COMMIT: d6ebe59b5ccdd204a7edc72ab6f0f89d575ac6f8"
+          Value: "COMMIT: aa2ff7d7604bfd22288fd2da7f0e6fa00f1d1dce"
           PropagateAtLaunch: true
         - Key: "atl:quickstart:timestamp"
-          Value: "TIMESTAMP: 2023-02-09T03:14:41Z"
+          Value: "TIMESTAMP: 2023-02-09T03:33:02Z"
           PropagateAtLaunch: true
   BambooClusterNodeLaunchConfig:
     Condition: IsBambooIncluded
